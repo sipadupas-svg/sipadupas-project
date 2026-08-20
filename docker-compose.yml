@@ -1,0 +1,50 @@
+# ─── SIPADUPAS — Docker Compose ─────────────────────────────────
+# Usage:
+#   docker compose up -d          # Start all services
+#   docker compose logs -f app    # Follow app logs
+#   docker compose down            # Stop all services
+#   docker compose up -d --build   # Rebuild & start
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sipadupas-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      # Persist SQLite database
+      - sipadupas-db:/app/db
+    environment:
+      - DATABASE_URL=file:/app/db/custom.db
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-me-in-production}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Optional: Nginx reverse proxy for TLS termination
+  # Uncomment if you need HTTPS / domain-based routing
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: sipadupas-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  #     - ./certbot/conf:/etc/letsencrypt:ro
+  #     - ./certbot/www:/var/www/certbot:ro
+  #   depends_on:
+  #     app:
+  #       condition: service_healthy
+
+volumes:
+  sipadupas-db:
+    driver: local
