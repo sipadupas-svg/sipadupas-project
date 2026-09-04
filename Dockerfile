@@ -34,8 +34,14 @@ COPY --from=builder --chown=sipadupas:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=sipadupas:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=sipadupas:nodejs /app/public ./public
 
-# Create db directory for SQLite
+# Copy Prisma schema and generated client (required for runtime DB access)
+COPY --from=builder --chown=sipadupas:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=sipadupas:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=sipadupas:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+
+# Create db directory for SQLite and copy any seed DB files
 RUN mkdir -p /app/db && chown sipadupas:nodejs /app/db
+COPY --from=builder --chown=sipadupas:nodejs /app/db/ ./db/
 
 USER sipadupas
 

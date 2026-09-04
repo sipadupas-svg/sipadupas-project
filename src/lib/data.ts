@@ -95,7 +95,7 @@ export interface Gangguan {
   jenis: string;
   lokasi: string;
   deskripsi: string;
-  status: "Baru" | " Ditangani" | "Selesai";
+  status: "Baru" | "Ditangani" | "Selesai";
   pelapor: string;
 }
 
@@ -645,7 +645,7 @@ export interface Galeri {
   id: string;
   judul: string;
   tanggal: string;
-  kategori: "Pembinaan" | "Kegiatan" | "Pengamanan" | "Pelayanan" | "Prestasi" | "Lainnya";
+  kategori: "Pembinaan" | "Kegiatan" | "Pengamanan" | "Pelayanan" | "Prestasi" | "Sosial" | "Lainnya";
   ringkas: string;
   jumlahFoto: number;
 }

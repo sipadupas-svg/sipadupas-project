@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   CalendarCheck,
@@ -13,8 +13,14 @@ import {
   XCircle,
   LogIn,
   Loader2,
+  Upload,
+  Download,
+  MessageCircle,
+  FileCheck2,
+  Camera,
+  Keyboard,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,10 +51,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageHeader, StatCard, SectionCard } from "./shared";
+import { PageHeader, StatCard, SectionCard, KameraScan } from "./shared";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAppStore } from "@/lib/store";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // ─── Types from API ─────────────────────────────────────────
 interface WBPItem {
@@ -66,25 +73,39 @@ interface KunjunganItem {
   noHp?: string | null;
   alamat?: string | null;
   hubungan: string;
-  wbpId: string;
+  wbpId?: string | null;
+  namaWbp?: string | null;
+  nomorRegisterWbp?: string | null;
   tanggal: string;
   sesi: string;
   status: string;
   checkedInAt?: string | null;
   selesaiAt?: string | null;
   catatanPetugas?: string | null;
+  keperluan?: string | null;
+  jenisIdentitas?: string | null;
+  qrCodeUrl?: string;
+  berkas?: { id: string; jenis: string; namaFile: string; mimeType: string; ukuran: number; data?: string }[];
   createdAt: string;
   updatedAt: string;
-  wbp: WBPItem;
+  wbp?: WBPItem | null;
+}
+
+type BookingFile = { jenis: "IDENTITAS" | "SELFIE"; namaFile: string; mimeType: string; ukuran: number; data: string };
+
+async function readBookingFile(file: File, jenis: BookingFile["jenis"]): Promise<BookingFile> {
+  const data = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error(`Berkas ${jenis.toLowerCase()} gagal dibaca`));
+    reader.readAsDataURL(file);
+  });
+  return { jenis, namaFile: file.name, mimeType: file.type, ukuran: file.size, data };
 }
 
 const SESI_LIST = [
-  { sesi: "Sesi 1 Pagi", jam: "08:00 – 09:30", kuota: 20 },
-  { sesi: "Sesi 2 Pagi", jam: "10:00 – 11:30", kuota: 20 },
-  { sesi: "Sesi 1 Siang", jam: "13:00 – 14:30", kuota: 20 },
-  { sesi: "Sesi 2 Siang", jam: "15:00 – 16:30", kuota: 20 },
-  { sesi: "Sesi 3 Sore", jam: "16:30 – 17:30", kuota: 20 },
-  { sesi: "Sesi 4 Sore", jam: "17:30 – 18:30", kuota: 20 },
+  { sesi: "Sesi Pagi", jam: "09:00 – 12:00", kuota: 20 },
+  { sesi: "Sesi Siang", jam: "13:00 – 15:00", kuota: 20 },
 ];
 
 const HUBUNGAN_OPTIONS = ["Istri", "Suami", "Anak", "Orang Tua", "Saudara", "Kerabat", "Lainnya"];
@@ -135,48 +156,64 @@ function PublicKunjunganView() {
 // ─── Public Booking Form (inline, not dialog) ───────────────
 function PublicBookingForm() {
   const [submitting, setSubmitting] = useState(false);
-  const [successKode, setSuccessKode] = useState("");
+  const [bookingResult, setBookingResult] = useState<{
+    kodeBooking: string;
+    namaPemohon: string;
+    hubungan: string;
+    namaWbp: string;
+    nomorRegisterWbp: string;
+    tanggal: string;
+    sesi: string;
+  } | null>(null);
   const [nama, setNama] = useState("");
   const [nik, setNik] = useState("");
   const [noHp, setNoHp] = useState("");
   const [alamat, setAlamat] = useState("");
   const [hubungan, setHubungan] = useState("");
   const [sesi, setSesi] = useState("");
-  const [wbpSearch, setWbpSearch] = useState("");
-  const [wbpResults, setWbpResults] = useState<WBPItem[]>([]);
-  const [selectedWbp, setSelectedWbp] = useState<WBPItem | null>(null);
+  const [namaWbp, setNamaWbp] = useState("");
+  const [nomorRegisterWbp, setNomorRegisterWbp] = useState("");
   const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10));
-
-  useEffect(() => {
-    if (!wbpSearch || wbpSearch.length < 2) {
-      setWbpResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/wbp?search=${encodeURIComponent(wbpSearch)}`);
-        if (res.ok) {
-          const json = await res.json();
-          setWbpResults(json.data || []);
-        }
-      } catch { /* ignore */ }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [wbpSearch]);
+  const [keperluan, setKeperluan] = useState("");
+  const [jenisIdentitas, setJenisIdentitas] = useState("KTP");
+  const [identitas, setIdentitas] = useState<File | null>(null);
+  const [selfie, setSelfie] = useState<File | null>(null);
+  const [setujuPersyaratan, setSetujuPersyaratan] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedWbp) { toast.error("Pilih WBP terlebih dahulu"); return; }
+    if (!nama.trim()) { toast.error("Nama pemohon wajib diisi"); return; }
+    if (!/^\d{16}$/.test(nik.trim())) { toast.error("NIK harus terdiri dari 16 digit"); return; }
+    if (!/^(\+62|62|08)\d{8,13}$/.test(noHp.trim())) { toast.error("Nomor WhatsApp tidak valid"); return; }
+    if (!alamat.trim()) { toast.error("Alamat wajib diisi"); return; }
+    if (!hubungan) { toast.error("Pilih hubungan dengan WBP terlebih dahulu"); return; }
+    if (!tanggal || !sesi) { toast.error("Tanggal dan sesi kunjungan wajib dipilih"); return; }
+    if (!keperluan.trim()) { toast.error("Keperluan kunjungan wajib diisi"); return; }
+    if (!namaWbp.trim()) { toast.error("Nama WBP yang dikunjungi wajib diisi"); return; }
+    if (!identitas || !selfie) { toast.error("Unggah berkas identitas dan foto selfie terlebih dahulu"); return; }
+    if (!setujuPersyaratan) { toast.error("Centang persetujuan persyaratan kunjungan"); return; }
+    if (identitas.size > 3 * 1024 * 1024 || selfie.size > 3 * 1024 * 1024) { toast.error("Ukuran setiap berkas maksimum 3 MB"); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(identitas.type)) { toast.error("Identitas harus JPG, PNG, WEBP, atau PDF"); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(selfie.type)) { toast.error("Selfie harus JPG, PNG, atau WEBP"); return; }
     setSubmitting(true);
     try {
+      const berkas = await Promise.all([readBookingFile(identitas, "IDENTITAS"), readBookingFile(selfie, "SELFIE")]);
       const res = await fetch("/api/kunjungan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ namaPemohon: nama, nikPemohon: nik || undefined, noHp: noHp || undefined, alamat: alamat || undefined, hubungan, wbpId: selectedWbp.id, tanggal, sesi }),
+        body: JSON.stringify({ namaPemohon: nama, nikPemohon: nik, noHp, alamat, hubungan, namaWbp: namaWbp.trim(), nomorRegisterWbp: nomorRegisterWbp.trim() || undefined, tanggal, sesi, keperluan, jenisIdentitas, setujuPersyaratan, berkas }),
       });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || "Gagal membuat booking"); }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error?.message || err?.message || "Gagal membuat booking"); }
       const json = await res.json();
-      setSuccessKode(json.data.kodeBooking);
+      setBookingResult({
+        kodeBooking: json.data.kodeBooking,
+        namaPemohon: nama.trim(),
+        hubungan,
+        namaWbp: namaWbp.trim(),
+        nomorRegisterWbp: nomorRegisterWbp.trim(),
+        tanggal,
+        sesi,
+      });
       toast.success(`Booking berhasil! Tiket: ${json.data.kodeBooking}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Gagal membuat booking");
@@ -185,7 +222,7 @@ function PublicBookingForm() {
     }
   }
 
-  if (successKode) {
+  if (bookingResult) {
     return (
       <div className="text-center py-8 space-y-4">
         <div className="size-16 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center mx-auto">
@@ -193,15 +230,21 @@ function PublicBookingForm() {
         </div>
         <div>
           <h3 className="text-lg font-semibold">Booking Berhasil Dikirim!</h3>
-          <p className="text-sm text-muted-foreground mt-1">Simpan kode tiket Anda untuk melacak status kunjungan.</p>
+          <p className="text-sm text-muted-foreground mt-1">Unduh e-tiket di bawah ini dan tunjukkan kepada petugas pendaftaran saat datang untuk diverifikasi.</p>
         </div>
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary font-mono font-semibold text-lg">
-          <Ticket className="size-5" strokeWidth={1.75} />
-          {successKode}
-        </div>
-        <p className="text-xs text-muted-foreground">Status awal: <span className="font-medium text-amber-600">Menunggu</span> — menunggu approval petugas</p>
+        <TiketUnduhCard
+          kodeBooking={bookingResult.kodeBooking}
+          namaPemohon={bookingResult.namaPemohon}
+          hubungan={bookingResult.hubungan}
+          namaWbp={bookingResult.namaWbp}
+          nomorRegisterWbp={bookingResult.nomorRegisterWbp}
+          tanggal={bookingResult.tanggal}
+          sesi={bookingResult.sesi}
+          status="Menunggu"
+        />
+        <p className="text-xs text-muted-foreground">Status awal: <span className="font-medium text-amber-600">Menunggu</span> — verifikasi dilakukan oleh <span className="font-medium">petugas pelayanan</span> saat Anda datang.</p>
         <div className="flex justify-center gap-3 pt-2">
-          <Button variant="outline" size="sm" onClick={() => { setSuccessKode(""); setNama(""); setNik(""); setNoHp(""); setAlamat(""); setHubungan(""); setSesi(""); setSelectedWbp(null); setWbpSearch(""); }}>Daftar Lagi</Button>
+          <Button variant="outline" size="sm" onClick={() => { setBookingResult(null); setNama(""); setNik(""); setNoHp(""); setAlamat(""); setHubungan(""); setSesi(""); setKeperluan(""); setIdentitas(null); setSelfie(null); setSetujuPersyaratan(false); setNamaWbp(""); setNomorRegisterWbp(""); }}>Daftar Lagi</Button>
           <Button size="sm" onClick={() => useAppStore.getState().setView("kunjungan")}>← Kembali</Button>
         </div>
       </div>
@@ -209,7 +252,7 @@ function PublicBookingForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
+    <form onSubmit={handleSubmit} noValidate className="space-y-4 max-w-2xl">
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <Label htmlFor="pub-nama">Nama Pemohon <span className="text-red-500">*</span></Label>
@@ -217,7 +260,7 @@ function PublicBookingForm() {
         </div>
         <div>
           <Label htmlFor="pub-nik">NIK</Label>
-          <Input id="pub-nik" value={nik} onChange={(e) => setNik(e.target.value)} placeholder="16 digit NIK" />
+          <Input id="pub-nik" inputMode="numeric" maxLength={16} value={nik} onChange={(e) => setNik(e.target.value.replace(/\D/g, "").slice(0, 16))} placeholder="16 digit NIK" />
         </div>
         <div>
           <Label htmlFor="pub-hp">No. HP</Label>
@@ -236,7 +279,7 @@ function PublicBookingForm() {
         </div>
         <div>
           <Label htmlFor="pub-tgl">Tanggal Kunjungan <span className="text-red-500">*</span></Label>
-          <Input id="pub-tgl" type="date" required value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+          <Input id="pub-tgl" type="date" required min={new Date().toISOString().slice(0, 10)} value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
         </div>
         <div className="sm:col-span-2">
           <Label htmlFor="pub-sesi">Sesi Kunjungan <span className="text-red-500">*</span></Label>
@@ -245,34 +288,50 @@ function PublicBookingForm() {
             <SelectContent>{SESI_LIST.map((s) => (<SelectItem key={s.sesi} value={s.sesi}>{s.sesi} · {s.jam} WITA</SelectItem>))}</SelectContent>
           </Select>
         </div>
-        <div className="sm:col-span-2">
-          <Label htmlFor="pub-wbp">Nama WBP / Nomor Register <span className="text-red-500">*</span></Label>
-          {selectedWbp ? (
-            <div className="flex items-center gap-2 p-3 rounded-lg border border-primary/40 bg-primary/5">
-              <CheckCircle2 className="size-4 text-primary shrink-0" strokeWidth={1.75} />
-              <span className="text-sm font-medium flex-1 truncate">{selectedWbp.nama} ({selectedWbp.nomorRegister})</span>
-              {selectedWbp.currentRoom && <span className="text-xs text-muted-foreground">· {selectedWbp.currentRoom.blockName}/{selectedWbp.currentRoom.roomNumber}</span>}
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => { setSelectedWbp(null); setWbpSearch(""); }}>Ganti</Button>
+        <div className="sm:col-span-2 rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Anda <span className="font-medium text-foreground">tidak perlu memilih nama WBP dari daftar</span>. Cukup tuliskan nama WBP yang akan dikunjungi — data akan diverifikasi oleh petugas pelayanan saat Anda datang.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="pub-wbp-nama">Nama WBP yang Dikunjungi <span className="text-red-500">*</span></Label>
+              <Input id="pub-wbp-nama" required value={namaWbp} onChange={(e) => setNamaWbp(e.target.value)} placeholder="Contoh: Ahmad Suryadi" autoComplete="off" />
             </div>
-          ) : (
-            <>
-              <Input id="pub-wbp" value={wbpSearch} onChange={(e) => setWbpSearch(e.target.value)} placeholder="Ketik nama atau nomor register WBP…" autoComplete="off" />
-              {wbpResults.length > 0 && (
-                <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-border bg-popover scroll-thin">
-                  {wbpResults.map((w) => (
-                    <button key={w.id} type="button" className="w-full text-left px-3 py-2.5 text-sm hover:bg-muted/60 transition-colors border-b border-border/60 last:border-0" onClick={() => { setSelectedWbp(w); setWbpResults([]); setWbpSearch(""); }}>
-                      <span className="font-medium">{w.nama}</span>
-                      <span className="text-xs text-muted-foreground ml-2">({w.nomorRegister})</span>
-                      {w.currentRoom && <span className="text-xs text-muted-foreground ml-1">· {w.currentRoom.blockName}/{w.currentRoom.roomNumber}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+            <div>
+              <Label htmlFor="pub-wbp-reg">Nomor Register WBP <span className="text-xs text-muted-foreground">(jika tahu)</span></Label>
+              <Input id="pub-wbp-reg" value={nomorRegisterWbp} onChange={(e) => setNomorRegisterWbp(e.target.value)} placeholder="Contoh: WBP-2024-001" autoComplete="off" />
+            </div>
+          </div>
         </div>
+        <div>
+          <Label htmlFor="pub-identitas-jenis">Jenis Tanda Pengenal <span className="text-red-500">*</span></Label>
+          <Select value={jenisIdentitas} onValueChange={setJenisIdentitas}>
+            <SelectTrigger id="pub-identitas-jenis"><SelectValue /></SelectTrigger>
+            <SelectContent>{["KTP", "SIM", "Paspor"].map((jenis) => <SelectItem key={jenis} value={jenis}>{jenis}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="pub-keperluan">Keperluan <span className="text-red-500">*</span></Label>
+          <Input id="pub-keperluan" required value={keperluan} onChange={(e) => setKeperluan(e.target.value)} placeholder="Contoh: kunjungan keluarga" />
+        </div>
+        <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
+          <div className="rounded-lg border border-dashed p-3 space-y-2">
+            <Label htmlFor="pub-identitas" className="flex items-center gap-2"><Upload className="size-4" />Upload {jenisIdentitas}</Label>
+            <Input id="pub-identitas" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required onChange={(e) => setIdentitas(e.target.files?.[0] || null)} />
+            <p className="text-xs text-muted-foreground">JPG/PNG/WEBP/PDF, maksimum 3 MB{identitas ? ` · ${identitas.name}` : ""}</p>
+          </div>
+          <div className="rounded-lg border border-dashed p-3 space-y-2">
+            <Label htmlFor="pub-selfie" className="flex items-center gap-2"><Upload className="size-4" />Foto Selfie</Label>
+            <Input id="pub-selfie" type="file" accept="image/jpeg,image/png,image/webp" capture="user" required onChange={(e) => setSelfie(e.target.files?.[0] || null)} />
+            <p className="text-xs text-muted-foreground">JPG/PNG/WEBP, maksimum 3 MB{selfie ? ` · ${selfie.name}` : ""}</p>
+          </div>
+        </div>
+        <label className="sm:col-span-2 flex items-start gap-3 rounded-lg border bg-muted/30 p-3 text-sm cursor-pointer">
+          <Checkbox checked={setujuPersyaratan} onCheckedChange={(checked) => setSetujuPersyaratan(checked === true)} />
+          <span>Saya menyetujui persyaratan kunjungan, bersedia mengikuti tata tertib Lapas, dan menyatakan data/berkas yang dikirim benar.</span>
+        </label>
       </div>
-      <Button type="submit" disabled={submitting || !selectedWbp || !hubungan || !sesi} className="w-full sm:w-auto">
+      <Button type="submit" disabled={submitting} className="w-full sm:w-auto">
         {submitting && <Loader2 className="size-4 mr-1 animate-spin" />}
         Kirim Booking
       </Button>
@@ -296,18 +355,12 @@ function TrackTiket() {
     setNotFound(false);
     setResult(null);
     try {
-      const res = await fetch("/api/kunjungan");
+      const res = await fetch(`/api/public/visit-bookings/track?kode=${encodeURIComponent(kode.trim())}`);
       if (!res.ok) throw new Error();
       const json = await res.json();
-      const all: KunjunganItem[] = json.data || [];
-      const found = all.find((k) => k.kodeBooking.toLowerCase() === kode.trim().toLowerCase());
-      if (found) {
-        setResult(found);
-      } else {
-        setNotFound(true);
-      }
+      setResult(json.data as KunjunganItem);
     } catch {
-      toast.error("Gagal mencari tiket");
+      setNotFound(true);
     } finally {
       setLoading(false);
     }
@@ -343,8 +396,8 @@ function TrackTiket() {
             </div>
             <div className="p-3 rounded-lg bg-muted/50">
               <div className="text-xs text-muted-foreground mb-1">WBP</div>
-              <div className="font-medium">{result.wbp.nama}</div>
-              <div className="text-xs text-muted-foreground">{result.wbp.nomorRegister}</div>
+              <div className="font-medium">{result.namaWbp || result.wbp?.nama || "-"}</div>
+              <div className="text-xs text-muted-foreground">{result.nomorRegisterWbp || result.wbp?.nomorRegister || "-"}</div>
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
@@ -352,6 +405,21 @@ function TrackTiket() {
             <span>Sesi: {result.sesi}</span>
             {result.catatanPetugas && <span>· Catatan: {result.catatanPetugas}</span>}
           </div>
+          {result.qrCodeUrl && (
+            <div className="border-t pt-4">
+              <p className="text-xs font-semibold text-center mb-2 text-muted-foreground">Unduh E-Tiket Kunjungan</p>
+              <TiketUnduhCard
+                kodeBooking={result.kodeBooking}
+                namaPemohon={result.namaPemohon}
+                hubungan={result.hubungan}
+                namaWbp={result.namaWbp || result.wbp?.nama || "-"}
+                nomorRegisterWbp={result.nomorRegisterWbp || result.wbp?.nomorRegister || ""}
+                tanggal={result.tanggal}
+                sesi={result.sesi}
+                status={result.status}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -365,11 +433,19 @@ function InternalKunjunganView() {
   const [kunjunganList, setKunjunganList] = useState<KunjunganItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQ, setSearchQ] = useState("");
+  // ── Scan Tiket (verifikasi petugas pendaftaran) ──
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanCode, setScanCode] = useState("");
+  const [scanLoading, setScanLoading] = useState(false);
+  const [cameraMode, setCameraMode] = useState(false);
 
   const fetchKunjungan = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/kunjungan");
+      const token = useAppStore.getState().currentUser?.token;
+      const res = await fetch("/api/kunjungan", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error("Gagal mengambil data");
       const json = await res.json();
       setKunjunganList(json.data || []);
@@ -384,9 +460,46 @@ function InternalKunjunganView() {
     fetchKunjungan();
   }, [fetchKunjungan]);
 
+  // Cari tiket berdasarkan kode booking — dipakai form manual & hasil scan kamera
+  const handleLookup = useCallback(async (kode: string) => {
+    const value = kode.trim();
+    if (!value) return;
+    setScanLoading(true);
+    try {
+      const token = useAppStore.getState().currentUser?.token;
+      const res = await fetch(`/api/kunjungan/scan?kode=${encodeURIComponent(value)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.error?.message || "Tiket tidak ditemukan");
+      }
+      const json = await res.json();
+      toast.success(`Tiket ${json.data.kodeBooking} ditemukan — verifikasi data sebelum check-in.`);
+      setScanOpen(false);
+      setCameraMode(false);
+      setScanCode("");
+      fetchKunjungan();
+      setTiketDetail(json.data as KunjunganItem);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal memindai tiket");
+    } finally {
+      setScanLoading(false);
+    }
+  }, [fetchKunjungan]);
+
+  async function handleScanTiket(e?: React.FormEvent) {
+    e?.preventDefault();
+    await handleLookup(scanCode);
+  }
+
   // Stats
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayKunjungan = kunjunganList.filter((k) => k.tanggal === todayStr);
+  // Tab aktif: tiket hari ini + mendatang (agar booking untuk tanggal depan tetap terlihat)
+  const activeKunjungan = kunjunganList
+    .filter((k) => k.tanggal >= todayStr && !["Selesai", "Ditolak"].includes(k.status))
+    .sort((a, b) => (a.tanggal === b.tanggal ? a.sesi.localeCompare(b.sesi) : a.tanggal.localeCompare(b.tanggal)));
   const checkinCount = todayKunjungan.filter((k) => k.status === "Check-in" || k.status === "Selesai").length;
   const menungguCount = todayKunjungan.filter((k) => k.status === "Menunggu").length;
   const ditolakCount = todayKunjungan.filter((k) => k.status === "Ditolak").length;
@@ -412,14 +525,68 @@ function InternalKunjunganView() {
         badge="Hari Ini"
         icon={CalendarCheck}
         action={
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="size-4 mr-1" /> Booking Baru
-              </Button>
-            </DialogTrigger>
-            <BookingDialog onClose={() => { setOpen(false); fetchKunjungan(); }} />
-          </Dialog>
+          <div className="flex items-center gap-2">
+            <Dialog open={scanOpen} onOpenChange={(v) => { setScanOpen(v); if (!v) setCameraMode(false); }}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <QrCode className="size-4 mr-1" /> Scan Tiket
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <QrCode className="size-5 text-primary" /> Scan / Verifikasi Tiket
+                  </DialogTitle>
+                  <DialogDescription>
+                    Pindai barcode pengunjung dengan kamera, atau ketik Nomor Booking. Verifikasi data wajib dilakukan sebelum check-in.
+                  </DialogDescription>
+                </DialogHeader>
+                {cameraMode ? (
+                  <KameraScan onDetected={handleLookup} />
+                ) : (
+                  <form onSubmit={handleScanTiket} className="space-y-3">
+                    <div>
+                      <Label htmlFor="scan-kode">Nomor Booking</Label>
+                      <Input
+                        id="scan-kode"
+                        autoFocus
+                        value={scanCode}
+                        onChange={(e) => setScanCode(e.target.value)}
+                        placeholder="Contoh: SJY-260819-001"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setScanOpen(false)}>Batal</Button>
+                      <Button type="submit" disabled={scanLoading || !scanCode.trim()}>
+                        {scanLoading && <Loader2 className="size-4 mr-1 animate-spin" />}
+                        Cari Tiket
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                )}
+                <div className="flex justify-center border-t pt-3">
+                  {cameraMode ? (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setCameraMode(false)}>
+                      <Keyboard className="size-4 mr-1" /> Ketik Manual
+                    </Button>
+                  ) : (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setCameraMode(true)} disabled={scanLoading}>
+                      <Camera className="size-4 mr-1" /> Scan via Kamera
+                    </Button>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="size-4 mr-1" /> Booking Baru
+                </Button>
+              </DialogTrigger>
+              <BookingDialog onClose={() => { setOpen(false); fetchKunjungan(); }} />
+            </Dialog>
+          </div>
         }
       />
 
@@ -439,8 +606,8 @@ function InternalKunjunganView() {
 
         <TabsContent value="aktif" className="space-y-4">
           <SectionCard
-            title="Tiket Kunjungan Hari Ini"
-            description={`${todayKunjungan.length} tiket terbit`}
+            title="Tiket Kunjungan Aktif"
+            description={`${activeKunjungan.length} tiket hari ini & mendatang`}
           >
             {loading ? (
               <div className="grid sm:grid-cols-2 gap-3">
@@ -448,11 +615,11 @@ function InternalKunjunganView() {
                   <Skeleton key={i} className="h-28 rounded-lg" />
                 ))}
               </div>
-            ) : todayKunjungan.length === 0 ? (
-              <div className="text-center py-8 text-sm text-muted-foreground">Belum ada kunjungan hari ini.</div>
+            ) : activeKunjungan.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground">Belum ada tiket aktif.</div>
             ) : (
               <div className="grid sm:grid-cols-2 gap-3">
-                {todayKunjungan.map((k) => (
+                {activeKunjungan.map((k) => (
                   <button
                     key={k.id}
                     onClick={() => setTiketDetail(k)}
@@ -462,7 +629,7 @@ function InternalKunjunganView() {
                       <div>
                         <div className="font-semibold text-sm">{k.namaPemohon}</div>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          {k.hubungan} dari {k.wbp.nama}
+                          {k.hubungan} dari {k.namaWbp || k.wbp?.nama || "-"}
                         </div>
                       </div>
                       <KunjunganStatusBadge status={k.status} />
@@ -470,6 +637,9 @@ function InternalKunjunganView() {
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-3 pt-3 border-t border-border/60">
                       <Ticket className="size-3.5 text-primary" />
                       <span className="font-mono">{k.kodeBooking}</span>
+                      <span>·</span>
+                      <CalendarDays className="size-3.5" />
+                      <span>{k.tanggal}</span>
                       <span>·</span>
                       <Clock className="size-3.5" />
                       <span>{k.sesi}</span>
@@ -484,7 +654,7 @@ function InternalKunjunganView() {
         <TabsContent value="sesi" className="space-y-4">
           <SectionCard
             title="Kuota Sesi Kunjungan"
-            description="6 sesi per hari · maksimum 20 pengunjung per sesi"
+            description={`${SESI_LIST.length} sesi per hari · maksimum 20 pengunjung per sesi`}
           >
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {SESI_LIST.map((s) => {
@@ -566,7 +736,7 @@ function InternalKunjunganView() {
                           <div className="text-sm font-medium">{k.namaPemohon}</div>
                           <div className="text-xs text-muted-foreground">{k.hubungan}</div>
                         </TableCell>
-                        <TableCell className="text-xs">{k.wbp.nama}</TableCell>
+                        <TableCell className="text-xs">{k.namaWbp || k.wbp?.nama || "-"}</TableCell>
                         <TableCell className="text-xs">{k.tanggal}</TableCell>
                         <TableCell className="text-xs">{k.sesi}</TableCell>
                         <TableCell><KunjunganStatusBadge status={k.status} /></TableCell>
@@ -587,7 +757,7 @@ function InternalKunjunganView() {
 
       {/* Detail dialog */}
       <Dialog open={!!tiketDetail} onOpenChange={(v) => !v && setTiketDetail(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[92vh] overflow-y-auto">
           {tiketDetail && (
             <TiketDetail
               tiket={tiketDetail}
@@ -622,38 +792,27 @@ function BookingDialog({ onClose }: { onClose: () => void }) {
   const [alamat, setAlamat] = useState("");
   const [hubungan, setHubungan] = useState("");
   const [sesi, setSesi] = useState("");
-  const [wbpSearch, setWbpSearch] = useState("");
-  const [wbpResults, setWbpResults] = useState<WBPItem[]>([]);
-  const [selectedWbp, setSelectedWbp] = useState<WBPItem | null>(null);
+  const [namaWbp, setNamaWbp] = useState("");
+  const [nomorRegisterWbp, setNomorRegisterWbp] = useState("");
   const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10));
-
-  // Search WBP with debounce
-  useEffect(() => {
-    if (!wbpSearch || wbpSearch.length < 2) {
-      setWbpResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/wbp?search=${encodeURIComponent(wbpSearch)}`);
-        if (res.ok) {
-          const json = await res.json();
-          setWbpResults(json.data || []);
-        }
-      } catch { /* ignore */ }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [wbpSearch]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedWbp) {
-      toast.error("Pilih WBP terlebih dahulu");
+    if (!nama.trim()) {
+      toast.error("Nama pemohon wajib diisi");
+      return;
+    }
+    if (!hubungan || !tanggal || !sesi) {
+      toast.error("Hubungan, tanggal, dan sesi wajib diisi");
+      return;
+    }
+    if (!namaWbp.trim()) {
+      toast.error("Nama WBP yang dikunjungi wajib diisi");
       return;
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/kunjungan", {
+      const res = await fetch("/api/kunjungan/internal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -662,7 +821,8 @@ function BookingDialog({ onClose }: { onClose: () => void }) {
           noHp: noHp || undefined,
           alamat: alamat || undefined,
           hubungan,
-          wbpId: selectedWbp.id,
+          namaWbp: namaWbp.trim(),
+          nomorRegisterWbp: nomorRegisterWbp.trim() || undefined,
           tanggal,
           sesi,
         }),
@@ -684,11 +844,11 @@ function BookingDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <DialogContent className="sm:max-w-md">
+    <DialogContent className="sm:max-w-md max-h-[92vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Booking Kunjungan Online</DialogTitle>
         <DialogDescription>
-          Lengkapi data pemohon. Tiket digital & QR Code akan diterbitkan setelah disetujui petugas.
+          Lengkapi data pemohon — tidak perlu memilih nama WBP dari daftar. Tiket ber-Nomor Booking & barcode langsung terbit untuk diverifikasi petugas saat kunjungan.
         </DialogDescription>
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -699,7 +859,7 @@ function BookingDialog({ onClose }: { onClose: () => void }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="nik">NIK</Label>
-            <Input id="nik" value={nik} onChange={(e) => setNik(e.target.value)} placeholder="16 digit NIK" />
+            <Input id="nik" inputMode="numeric" maxLength={16} value={nik} onChange={(e) => setNik(e.target.value.replace(/\D/g, "").slice(0, 16))} placeholder="16 digit NIK" />
           </div>
           <div>
             <Label htmlFor="noHp">No. HP</Label>
@@ -724,7 +884,7 @@ function BookingDialog({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <Label htmlFor="tanggal">Tanggal Kunjungan</Label>
-            <Input id="tanggal" type="date" required value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+            <Input id="tanggal" type="date" required min={new Date().toISOString().slice(0, 10)} value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
           </div>
         </div>
         <div>
@@ -740,45 +900,19 @@ function BookingDialog({ onClose }: { onClose: () => void }) {
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label htmlFor="wbp">Nama WBP / Register</Label>
-          {selectedWbp ? (
-            <div className="flex items-center gap-2 p-2 rounded-lg border border-primary/40 bg-primary/5">
-              <CheckCircle2 className="size-4 text-primary shrink-0" />
-              <span className="text-sm font-medium flex-1 truncate">{selectedWbp.nama} ({selectedWbp.nomorRegister})</span>
-              <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setSelectedWbp(null); setWbpSearch(""); }}>Ganti</Button>
-            </div>
-          ) : (
-            <>
-              <Input
-                id="wbp"
-                value={wbpSearch}
-                onChange={(e) => setWbpSearch(e.target.value)}
-                placeholder="Cari nama atau nomor register WBP…"
-                autoComplete="off"
-              />
-              {wbpResults.length > 0 && (
-                <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-border bg-popover scroll-thin">
-                  {wbpResults.map((w) => (
-                    <button
-                      key={w.id}
-                      type="button"
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors border-b border-border/60 last:border-0"
-                      onClick={() => { setSelectedWbp(w); setWbpResults([]); setWbpSearch(""); }}
-                    >
-                      <span className="font-medium">{w.nama}</span>
-                      <span className="text-xs text-muted-foreground ml-2">({w.nomorRegister})</span>
-                      {w.currentRoom && <span className="text-xs text-muted-foreground ml-1">· {w.currentRoom.blockName}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="wbp">Nama WBP yang Dikunjungi</Label>
+            <Input id="wbp" required value={namaWbp} onChange={(e) => setNamaWbp(e.target.value)} placeholder="Contoh: Ahmad Suryadi" autoComplete="off" />
+          </div>
+          <div>
+            <Label htmlFor="wbp-reg">Nomor Register (opsional)</Label>
+            <Input id="wbp-reg" value={nomorRegisterWbp} onChange={(e) => setNomorRegisterWbp(e.target.value)} placeholder="Contoh: WBP-2024-001" autoComplete="off" />
+          </div>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>Batal</Button>
-          <Button type="submit" disabled={submitting || !selectedWbp}>
+          <Button type="submit" disabled={submitting}>
             {submitting && <Loader2 className="size-4 mr-1 animate-spin" />}
             Kirim Booking
           </Button>
@@ -796,9 +930,10 @@ function TiketDetail({ tiket, onClose, onRefresh }: { tiket: KunjunganItem; onCl
   async function handleAction(action: string, extra?: Record<string, unknown>) {
     setActionLoading(true);
     try {
+      const token = useAppStore.getState().currentUser?.token;
       const res = await fetch(`/api/kunjungan/${tiket.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action, ...extra }),
       });
       if (!res.ok) {
@@ -816,6 +951,16 @@ function TiketDetail({ tiket, onClose, onRefresh }: { tiket: KunjunganItem; onCl
     }
   }
 
+  function whatsappLink() {
+    const phone = (tiket.noHp || "").replace(/\D/g, "").replace(/^0/, "62");
+    if (!phone) return "";
+    const statusText = tiket.status === "Ditolak" ? "ditolak" : tiket.status === "Disetujui" ? "disetujui" : "diperbarui";
+    const reason = tiket.catatanPetugas ? `\nCatatan petugas: ${tiket.catatanPetugas}` : "";
+    const wbpNama = tiket.namaWbp || tiket.wbp?.nama || "-";
+    const message = `Halo ${tiket.namaPemohon}, pendaftaran kunjungan ${tiket.kodeBooking} ke WBP ${wbpNama} telah ${statusText}. Tanggal: ${tiket.tanggal}, sesi: ${tiket.sesi}.${reason}\n\nSalam, Petugas Lapas Kelas IIA Bontang.`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  }
+
   return (
     <div>
       <DialogHeader>
@@ -829,24 +974,42 @@ function TiketDetail({ tiket, onClose, onRefresh }: { tiket: KunjunganItem; onCl
       </DialogHeader>
       <div className="space-y-4 py-3">
         <div className="flex flex-col items-center justify-center p-5 rounded-lg border-2 border-dashed border-primary/40 bg-primary/5">
-          <div className="size-32 rounded-lg bg-white flex items-center justify-center mb-3 shadow-sm">
-            <QrCode className="size-24 text-foreground" />
-          </div>
+          <img
+            src={tiket.qrCodeUrl || `/api/public/qr/${encodeURIComponent(tiket.kodeBooking)}`}
+            alt={`Barcode ${tiket.kodeBooking}`}
+            className="size-32 rounded-lg bg-white object-contain p-1 mb-3 shadow-sm"
+          />
           <div className="text-xs text-muted-foreground">Tiket</div>
           <div className="font-mono font-semibold text-sm">{tiket.kodeBooking}</div>
         </div>
         <div className="space-y-2 text-sm">
           <DetailRow label="Pemohon" value={tiket.namaPemohon} icon={Users} />
           <DetailRow label="Hubungan" value={tiket.hubungan} icon={Users} />
-          <DetailRow label="WBP" value={`${tiket.wbp.nama} (${tiket.wbp.nomorRegister})`} icon={Users} />
+          <DetailRow label="WBP" value={`${tiket.namaWbp || tiket.wbp?.nama || "-"}${tiket.nomorRegisterWbp || tiket.wbp?.nomorRegister ? ` (${tiket.nomorRegisterWbp || tiket.wbp?.nomorRegister})` : ""}`} icon={Users} />
           <DetailRow label="Tanggal" value={tiket.tanggal} icon={CalendarDays} />
           <DetailRow label="Sesi" value={tiket.sesi} icon={Clock} />
+          {tiket.keperluan && <DetailRow label="Keperluan" value={tiket.keperluan} icon={FileCheck2} />}
+          {tiket.jenisIdentitas && <DetailRow label="Identitas" value={tiket.jenisIdentitas} icon={FileCheck2} />}
           {tiket.catatanPetugas && <DetailRow label="Catatan" value={tiket.catatanPetugas} icon={Ticket} />}
           <div className="flex items-center justify-between pt-2 border-t border-border">
             <span className="text-muted-foreground flex items-center gap-1.5 text-xs"><CheckCircle2 className="size-3.5" /> Status</span>
             <KunjunganStatusBadge status={tiket.status} />
           </div>
         </div>
+
+        {tiket.berkas && tiket.berkas.length > 0 && (
+          <div className="rounded-lg border p-3 space-y-2">
+            <div className="text-xs font-semibold flex items-center gap-2"><FileCheck2 className="size-4 text-primary" /> Berkas pendaftaran</div>
+            <div className="grid grid-cols-2 gap-2">
+              {tiket.berkas.map((file) => (
+                <a key={file.id} href={file.data} target="_blank" rel="noreferrer" className="rounded border p-2 text-xs hover:bg-muted/40">
+                  <div className="font-medium">{file.jenis === "SELFIE" ? "Foto Selfie" : `Tanda Pengenal (${tiket.jenisIdentitas || "dokumen"})`}</div>
+                  <div className="text-muted-foreground truncate">{file.namaFile}</div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Tolak section */}
         {tiket.status === "Menunggu" && (
@@ -858,13 +1021,24 @@ function TiketDetail({ tiket, onClose, onRefresh }: { tiket: KunjunganItem; onCl
       </div>
       <DialogFooter className="flex-col gap-2 sm:flex-row">
         <Button variant="outline" onClick={onClose}>Tutup</Button>
+        {whatsappLink() && (tiket.status === "Ditolak" || tiket.status === "Disetujui") && (
+          <Button variant="outline" asChild>
+            <a href={whatsappLink()} target="_blank" rel="noreferrer"><MessageCircle className="size-4 mr-1 text-emerald-600" /> Konfirmasi WA</a>
+          </Button>
+        )}
+        {tiket.status === "Menunggu" && (
+          <Button disabled={actionLoading} onClick={() => handleAction("setujui", { catatanPetugas: catatan || undefined })}>
+            {actionLoading && <Loader2 className="size-4 mr-1 animate-spin" />}
+            <CheckCircle2 className="size-4 mr-1" /> Setujui
+          </Button>
+        )}
         {tiket.status === "Menunggu" && (
           <Button variant="destructive" disabled={actionLoading} onClick={() => handleAction("tolak", { catatanPetugas: catatan || undefined })}>
             {actionLoading && <Loader2 className="size-4 mr-1 animate-spin" />}
             <XCircle className="size-4 mr-1" /> Tolak
           </Button>
         )}
-        {(tiket.status === "Menunggu" || tiket.status === "Disetujui") && (
+        {tiket.status === "Disetujui" && (
           <Button disabled={actionLoading} onClick={() => handleAction("checkin")}>
             {actionLoading && <Loader2 className="size-4 mr-1 animate-spin" />}
             <LogIn className="size-4 mr-1" /> Proses Check-in
@@ -907,3 +1081,191 @@ function DetailRow({ label, value, icon: Icon }: { label: string; value: string;
     </div>
   );
 }
+
+// ─── E-Tiket Unduhan (barcode + data kunjungan dalam satu form gambar) ──────
+interface TiketUnduhProps {
+  kodeBooking: string;
+  namaPemohon: string;
+  hubungan: string;
+  namaWbp: string;
+  nomorRegisterWbp?: string;
+  tanggal: string;
+  sesi: string;
+  status?: string;
+}
+
+function TiketUnduhCard({ kodeBooking, namaPemohon, hubungan, namaWbp, nomorRegisterWbp, tanggal, sesi, status }: TiketUnduhProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [qrFailed, setQrFailed] = useState(false);
+
+  const W = 860;
+  const H = 1160;
+
+  function drawTicket(ctx: CanvasRenderingContext2D, qrImg: HTMLImageElement | null) {
+    // Latar putih (wajib untuk ekspor JPG yang tidak mendukung transparansi)
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "left";
+
+    // Kop / label instansi
+    ctx.fillStyle = "#0F3D66";
+    ctx.fillRect(0, 0, W, 150);
+    ctx.strokeStyle = "#F59E0B";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(0, 150);
+    ctx.lineTo(W, 150);
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "bold 40px Arial, Helvetica, sans-serif";
+    ctx.fillText("LAPAS KELAS IIA BONTANG", W / 2, 66);
+    ctx.font = "600 21px Arial, Helvetica, sans-serif";
+    ctx.fillText("E-TIKET KUNJUNGAN ONLINE", W / 2, 106);
+    if (status) {
+      ctx.font = "italic 17px Arial, Helvetica, sans-serif";
+      ctx.fillStyle = "#BFDBFE";
+      ctx.fillText(`Status: ${status}`, W / 2, 134);
+    }
+    ctx.textAlign = "left";
+
+
+    // Data kunjungan
+    const rows: Array<[string, string]> = [
+      ["NOMOR BOOKING", kodeBooking],
+      ["NAMA PENGUNJUNG", namaPemohon],
+      ["HUBUNGAN DENGAN WBP", hubungan],
+      ["WBP YANG DIKUNJUNGI", namaWbp],
+      ["NOMOR REGISTER WBP", nomorRegisterWbp && nomorRegisterWbp.trim() ? nomorRegisterWbp : "-"],
+      ["TANGGAL KUNJUNGAN", tanggal],
+      ["SESI KUNJUNGAN", sesi],
+    ];
+
+    let y = 208;
+    rows.forEach(([label, value], idx) => {
+      ctx.fillStyle = "#64748B";
+      ctx.font = "15px Arial, Helvetica, sans-serif";
+      ctx.fillText(label, 70, y);
+      if (idx === 0) {
+        ctx.fillStyle = "#0F3D66";
+        ctx.font = "bold 36px 'Courier New', monospace";
+      } else {
+        ctx.fillStyle = "#0F172A";
+        ctx.font = "bold 24px Arial, Helvetica, sans-serif";
+      }
+      ctx.fillText(String(value || "-").slice(0, 42), 70, y + 36);
+      ctx.strokeStyle = "#E2E8F0";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(70, y + 52);
+      ctx.lineTo(W - 70, y + 52);
+      ctx.stroke();
+      y += idx === 0 ? 82 : 66;
+    });
+
+
+    // Barcode QR
+    const qrSize = 330;
+    const qrX = (W - qrSize) / 2;
+    const qrY = y + 18;
+    ctx.strokeStyle = "#CBD5E1";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(qrX - 14, qrY - 14, qrSize + 28, qrSize + 28);
+    if (qrImg) {
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+    } else {
+      ctx.fillStyle = "#F1F5F9";
+      ctx.fillRect(qrX, qrY, qrSize, qrSize);
+      ctx.fillStyle = "#64748B";
+      ctx.textAlign = "center";
+      ctx.font = "bold 22px Arial, Helvetica, sans-serif";
+      ctx.fillText("KODE TIDAK TERSEDIA", qrX + qrSize / 2, qrY + qrSize / 2 - 12);
+      ctx.font = "bold 26px 'Courier New', monospace";
+      ctx.fillText(kodeBooking, qrX + qrSize / 2, qrY + qrSize / 2 + 24);
+      ctx.textAlign = "left";
+    }
+
+    // Catatan kaki
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#334155";
+    ctx.font = "17px Arial, Helvetica, sans-serif";
+    ctx.fillText("* Barcode ini dipindai petugas pendaftaran untuk verifikasi kedatangan", W / 2, qrY + qrSize + 52);
+    ctx.fillStyle = "#94A3B8";
+    ctx.font = "14px Arial, Helvetica, sans-serif";
+    ctx.fillText(
+      `Dicetak: ${new Date().toLocaleString("id-ID")} · Sistem Kunjungan Online Lapas Kelas IIA Bontang`,
+      W / 2,
+      qrY + qrSize + 82,
+    );
+    ctx.textAlign = "left";
+  }
+
+
+  useEffect(() => {
+    let cancelled = false;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    drawTicket(ctx, null);
+
+    // Muat QR via proxy same-origin agar canvas bisa diekspor (tidak tainted CORS)
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled) return;
+      drawTicket(ctx, img);
+    };
+    img.onerror = () => {
+      if (cancelled) return;
+      setQrFailed(true);
+      drawTicket(ctx, null);
+    };
+    img.src = `/api/public/qr/${encodeURIComponent(kodeBooking)}`;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [kodeBooking]);
+
+  function download(mime: "image/png" | "image/jpeg") {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ext = mime === "image/jpeg" ? "jpg" : "png";
+    const dataUrl = mime === "image/jpeg" ? canvas.toDataURL("image/jpeg", 0.95) : canvas.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `tiket-kunjungan-${kodeBooking}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast.success(`E-tiket berhasil diunduh sebagai ${ext.toUpperCase()}`);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-center">
+        <div className="rounded-xl border bg-white p-2 shadow-sm">
+          <canvas ref={canvasRef} className="max-h-[430px] w-auto max-w-full rounded-lg" />
+        </div>
+      </div>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => download("image/png")}>
+          <Download className="size-4 mr-2" />Unduh PNG
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => download("image/jpeg")}>
+          <Download className="size-4 mr-2" />Unduh JPG
+        </Button>
+      </div>
+      {qrFailed && (
+        <p className="text-xs text-muted-foreground text-center">
+          Barcode QR gagal dimuat — Nomor Booking tetap tercantum pada tiket dan dapat diverifikasi manual oleh petugas.
+        </p>
+      )}
+    </div>
+  );
+}
+

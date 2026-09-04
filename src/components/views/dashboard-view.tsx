@@ -9,19 +9,15 @@ import {
   Stethoscope,
   Wrench,
   Activity,
-  TrendingUp,
   ShieldCheck,
   LayoutDashboard,
   Clock,
-  CheckCircle2,
   FileBarChart,
   Award,
-  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -33,19 +29,12 @@ import {
   Bar,
   Legend,
 } from "recharts";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { PageHeader, StatCard, SectionCard } from "./shared";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { useAppStore } from "@/lib/store";
 
 // ---------- API response types ----------
 interface DashboardData {
@@ -60,7 +49,7 @@ interface DashboardData {
   gangguanAktif: number;
   kehadiranPembinaan: number;
   skmScore: number;
-  distribusiBlok: { blok: string; kapasitas: number; total: number }[];
+  distribusiBlok: { blok: string; kapasitas: number; terisi: number }[];
   statusWBP: { status: string; total: number }[];
 }
 
@@ -77,20 +66,45 @@ const STATUS_COLOR_MAP: Record<string, string> = {
 export function DashboardView() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const token = useAppStore((state) => state.currentUser?.token);
 
   const fetchDashboard = useCallback(async () => {
+    if (!token) {
+      setData(null);
+      setErrorMessage("Sesi login tidak ditemukan. Silakan login kembali.");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const res = await fetch("/api/dashboard");
-      if (!res.ok) throw new Error("Failed to fetch dashboard");
+      setErrorMessage(null);
+      const res = await fetch("/api/dashboard", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
       const json = await res.json();
-      setData(json);
-    } catch {
+
+      if (!res.ok) {
+        throw new Error(json?.message || "Data dashboard gagal dimuat");
+      }
+
+      // Dashboard API returns the data directly. Keep compatibility with
+      // the standard { success, data } response shape used by other APIs.
+      const payload = json?.data && json?.success ? json.data : json;
+      if (!payload || typeof payload.totalWBP !== "number") {
+        throw new Error("Format data dashboard tidak valid");
+      }
+      setData(payload as DashboardData);
+    } catch (err) {
+      setData(null);
+      setErrorMessage(err instanceof Error ? err.message : "Data dashboard belum dapat dimuat. Silakan coba lagi.");
       toast.error("Gagal memuat data dashboard");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     fetchDashboard();
@@ -105,8 +119,35 @@ export function DashboardView() {
           badge="LIVE"
           icon={LayoutDashboard}
         />
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        {errorMessage ? (
+          <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-6 text-center">
+            <p className="text-sm text-destructive mb-3">{errorMessage}</p>
+            <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
+              Coba Lagi
+            </Button>
+          </div>
+        ) : null}
+        {/* Skeleton grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-5 animate-pulse">
+              <div className="h-3 bg-muted rounded w-20 mb-3" />
+              <div className="h-8 bg-muted rounded w-12 mb-2" />
+              <div className="h-3 bg-muted rounded w-28" />
+            </div>
+          ))}
+        </div>
+        <div className="grid lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 rounded-xl border border-border bg-card p-5 animate-pulse">
+            <div className="h-4 bg-muted rounded w-40 mb-1" />
+            <div className="h-3 bg-muted rounded w-24 mb-4" />
+            <div className="h-52 bg-muted/50 rounded" />
+          </div>
+          <div className="rounded-xl border border-border bg-card p-5 animate-pulse">
+            <div className="h-4 bg-muted rounded w-24 mb-1" />
+            <div className="h-3 bg-muted rounded w-20 mb-4" />
+            <div className="h-36 bg-muted/50 rounded" />
+          </div>
         </div>
       </div>
     );
@@ -114,14 +155,12 @@ export function DashboardView() {
 
   const occupancyRate = data.kapasitas > 0 ? Math.round((data.totalWBP / data.kapasitas) * 100) : 0;
 
-  // Transform distribusiBlok for chart
   const blokChartData = data.distribusiBlok.map((b) => ({
     blok: b.blok,
-    wbp: b.total,
+    wbp: b.terisi,
     kapasitas: b.kapasitas,
   }));
 
-  // Transform statusWBP for pie chart
   const statusChartData = data.statusWBP.map((s, i) => ({
     name: s.status,
     value: s.total,
@@ -130,16 +169,29 @@ export function DashboardView() {
 
   return (
     <div className="space-y-6">
+      {/* Refresh button in header */}
       <PageHeader
         title="Dashboard Pimpinan"
         description="Ringkasan operasional harian Lapas Kelas IIA Bontang — pemantauan terpadu seluruh modul SIPADUPAS."
         badge="LIVE"
         icon={LayoutDashboard}
         action={
-          <Button variant="outline" size="sm" onClick={() => toast.success("Laporan berhasil diunduh")}>
-            <FileBarChart className="size-4 mr-2" />
-            Export PDF
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchDashboard}
+              disabled={loading}
+              className="gap-1.5"
+            >
+              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+              Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => toast.success("Laporan berhasil diunduh")}>
+              <FileBarChart className="size-4 mr-2" />
+              Export PDF
+            </Button>
+          </div>
         }
       />
 
@@ -194,6 +246,7 @@ export function DashboardView() {
                     border: "1px solid var(--border)",
                     borderRadius: 8,
                     fontSize: 12,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -229,6 +282,7 @@ export function DashboardView() {
                     border: "1px solid var(--border)",
                     borderRadius: 8,
                     fontSize: 12,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                   }}
                 />
               </PieChart>
@@ -323,10 +377,10 @@ function KpiItem({
   }[tone];
 
   return (
-    <div>
+    <div className="group">
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
-          <div className={`size-7 rounded-md flex items-center justify-center ${iconClass}`}>
+          <div className={`size-7 rounded-md flex items-center justify-center ${iconClass} group-hover:scale-110 transition-transform`}>
             <Icon className="size-3.5" />
           </div>
           <span className="text-sm font-medium">{label}</span>
@@ -337,7 +391,10 @@ function KpiItem({
         </span>
       </div>
       <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-        <div className={`h-full rounded-full ${toneClass}`} style={{ width: `${pct}%` }} />
+        <div
+          className={`h-full rounded-full ${toneClass} transition-all duration-500`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );
@@ -361,7 +418,7 @@ function SnapshotMini({
     danger: "bg-red-500/15 text-red-600",
   }[tone];
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card">
+    <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted/30 hover:border-primary/20 transition-all">
       <div className={`size-10 rounded-lg flex items-center justify-center ${cls}`}>
         <Icon className="size-5" />
       </div>

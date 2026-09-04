@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/security/security-pipeline'
+import { PERM_PENGAMANAN_UPDATE } from '@/lib/security/permissions'
 
 // PUT /api/pengamanan/kerja-luar/[id] — Kembali action (UF-10)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(request, [PERM_PENGAMANAN_UPDATE])
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { id } = await params
     const body = await request.json()

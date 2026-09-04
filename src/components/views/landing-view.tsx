@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect, useState } from "react";
 import {
   ShieldCheck,
   CalendarCheck,
@@ -18,10 +19,12 @@ import {
   Building2,
   Star,
   Package,
+  ChevronDown,
 } from "lucide-react";
 import type { ViewKey } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 interface LandingViewProps {
   onNavigate: (v: ViewKey) => void;
@@ -149,6 +152,29 @@ const statsBar = [
 ];
 
 /* ------------------------------------------------------------------ */
+/*  Intersection Observer Hook                                         */
+/* ------------------------------------------------------------------ */
+function useInView(ref: React.RefObject<HTMLElement | null>) {
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          obs.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [ref]);
+  return inView;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -159,9 +185,7 @@ export function LandingView({ onNavigate }: LandingViewProps) {
     <div className="flex flex-col min-h-screen bg-[#F8FAFC]">
       {/* HERO */}
       <section className="relative overflow-hidden bg-blue-900">
-        {/* Subtle gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-blue-900 to-blue-800/80" />
-        {/* Subtle decorative pattern */}
         <div
           className="absolute inset-0 opacity-[0.04]"
           style={{
@@ -174,8 +198,7 @@ export function LandingView({ onNavigate }: LandingViewProps) {
         <div className="relative max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-12 sm:py-20 lg:py-24">
           <div className="grid lg:grid-cols-5 gap-10 lg:gap-12 items-center">
             {/* Left — Text content (3 cols) */}
-            <div className="lg:col-span-3 text-center lg:text-left">
-              {/* Logo / emblem area */}
+            <div className="lg:col-span-3 text-center lg:text-left animate-fade-in-up">
               <div className="flex items-center justify-center lg:justify-start gap-3 mb-6">
                 <div className="size-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
                   <ShieldCheck className="size-7 text-teal-400" strokeWidth={1.75} />
@@ -204,11 +227,10 @@ export function LandingView({ onNavigate }: LandingViewProps) {
                 transparan, akuntabel, terdokumentasi, dan aman.
               </p>
 
-              {/* CTA buttons */}
               <div className="mt-7 flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center lg:justify-start">
                 <Button
                   size="lg"
-                  className="bg-teal-600 hover:bg-teal-700 text-white font-semibold"
+                  className="bg-teal-600 hover:bg-teal-700 text-white font-semibold shadow-lg shadow-teal-600/25 hover:shadow-teal-600/40 transition-all"
                   onClick={() => onNavigate("kunjungan")}
                 >
                   <CalendarCheck className="size-4 mr-2" strokeWidth={1.75} />
@@ -228,14 +250,13 @@ export function LandingView({ onNavigate }: LandingViewProps) {
                 </Button>
               </div>
 
-              {/* Quick trust badges */}
               <div className="mt-6 flex items-center gap-4 sm:gap-5 text-xs text-blue-200/70 flex-wrap justify-center lg:justify-start">
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2
                     className="size-3.5 text-teal-400"
                     strokeWidth={1.75}
                   />{" "}
-                  9 Modul Terpadu
+                  {modules.length} Modul Terpadu
                 </span>
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2
@@ -255,8 +276,8 @@ export function LandingView({ onNavigate }: LandingViewProps) {
             </div>
 
             {/* Right — Decorative card (2 cols) */}
-            <div className="lg:col-span-2 hidden lg:block">
-              <div className="bg-white/10 backdrop-blur border border-white/15 rounded-2xl p-6 space-y-4">
+            <div className="lg:col-span-2 hidden lg:block animate-fade-in-up stagger-3">
+              <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-6 space-y-4 hover:bg-white/15 transition-colors">
                 <div className="text-white font-semibold text-sm flex items-center gap-2">
                   <Lock className="size-4" strokeWidth={1.75} />
                   Akses Sistem Internal
@@ -281,7 +302,7 @@ export function LandingView({ onNavigate }: LandingViewProps) {
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3 pt-2">
-                  <MiniStat label="Modul" value="9" />
+                  <MiniStat label="Modul" value={String(modules.length)} />
                   <MiniStat label="WBP Terdata" value="312" />
                   <MiniStat label="Kunjungan" value="486" />
                   <MiniStat label="SKM" value="88.4" />
@@ -290,16 +311,22 @@ export function LandingView({ onNavigate }: LandingViewProps) {
             </div>
           </div>
         </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 animate-bounce hidden sm:block">
+          <ChevronDown className="size-5 text-white/40" strokeWidth={1.5} />
+        </div>
       </section>
 
       {/* STATS BAR */}
       <section className="bg-white shadow-sm relative z-10 -mt-px">
         <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-slate-200">
-            {statsBar.map((s) => (
+            {statsBar.map((s, i) => (
               <div
                 key={s.label}
-                className="flex items-center gap-3 py-4 sm:py-5 px-3 sm:px-5 first:pl-0 last:pr-0"
+                className="flex items-center gap-3 py-4 sm:py-5 px-3 sm:px-5 first:pl-0 last:pr-0 animate-fade-in-up"
+                style={{ animationDelay: `${100 + i * 50}ms` }}
               >
                 <div className="size-10 rounded-lg bg-blue-900/5 text-blue-900 flex items-center justify-center shrink-0">
                   <s.icon className="size-5" strokeWidth={1.75} />
@@ -308,7 +335,7 @@ export function LandingView({ onNavigate }: LandingViewProps) {
                   <div className="text-xs text-slate-500 font-medium">
                     {s.label}
                   </div>
-                  <div className="text-xl font-bold text-blue-900">
+                  <div className="text-xl font-bold text-blue-900 tabular-nums">
                     {s.value}
                   </div>
                 </div>
@@ -319,135 +346,131 @@ export function LandingView({ onNavigate }: LandingViewProps) {
       </section>
 
       {/* LAYANAN PUBLIK */}
-      <section className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-12 sm:py-16">
-        <div className="max-w-2xl mb-8">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-blue-900">
-            Layanan Publik
-          </h2>
-          <p className="mt-2 text-slate-500">
-            Akses cepat seluruh layanan publik Lapas Kelas IIA Bontang.
-            Seluruh layanan <strong className="text-slate-700">gratis</strong>{" "}
-            dan dapat diakses 24 jam.
-          </p>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {publicServices.map((svc) => (
-            <div
-              key={svc.key}
-              className="card-standard group cursor-pointer"
-              onClick={() =>
-                isAuthenticated || ["berita", "galeri", "skm", "barangTitipan", "kunjungan", "pengaduan"].includes(svc.key)
-                  ? onNavigate(svc.key)
-                  : undefined
-              }
-            >
-              <div className="size-11 rounded-xl bg-blue-900/5 text-blue-900 flex items-center justify-center mb-4 group-hover:bg-teal-600/10 group-hover:text-teal-600 transition-colors">
-                <svc.icon className="size-5" strokeWidth={1.75} />
-              </div>
-              <h3 className="font-semibold text-slate-900 text-[15px]">
-                {svc.title}
-              </h3>
-              <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
-                {svc.desc}
-              </p>
-              <button
-                type="button"
-                className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (
-                    isAuthenticated ||
-                    ["berita", "galeri", "skm", "barangTitipan", "kunjungan", "pengaduan"].includes(svc.key)
-                  ) {
-                    onNavigate(svc.key);
-                  }
-                }}
-              >
-                Selengkapnya
-                <ArrowRight className="size-3.5" strokeWidth={1.75} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* MODUL TERPADU */}
-      <section className="bg-white border-y border-slate-200">
-        <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-12 sm:py-16">
+      <ScrollSection>
+        <section className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-12 sm:py-16">
           <div className="max-w-2xl mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-blue-900">
-              Modul Terpadu SIPADUPAS
+              Layanan Publik
             </h2>
             <p className="mt-2 text-slate-500">
-              Satu platform terintegrasi yang menghubungkan seluruh kebutuhan
-              operasional Lapas dengan pelayanan publik.
+              Akses cepat seluruh layanan publik Lapas Kelas IIA Bontang.
+              Seluruh layanan <strong className="text-slate-700">gratis</strong>{" "}
+              dan dapat diakses 24 jam.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {modules.map((m) => (
+            {publicServices.map((svc, i) => (
               <div
-                key={m.name}
-                className="flex gap-3 p-4 rounded-xl bg-[#F8FAFC] border border-slate-200 hover:border-blue-900/20 hover:shadow-sm transition-all"
+                key={svc.key}
+                className="card-standard group cursor-pointer flex flex-col hover:border-blue-900/20 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up"
+                style={{ animationDelay: `${i * 60}ms` }}
+                onClick={() => onNavigate(svc.key)}
               >
-                <div className="size-10 rounded-lg bg-blue-900/5 text-blue-900 flex items-center justify-center shrink-0">
-                  <m.icon className="size-5" strokeWidth={1.75} />
+                <div className="size-11 rounded-xl bg-blue-900/5 text-blue-900 flex items-center justify-center mb-4 group-hover:bg-teal-600/10 group-hover:text-teal-600 group-hover:scale-110 transition-all duration-300">
+                  <svc.icon className="size-5" strokeWidth={1.75} />
                 </div>
-                <div className="min-w-0">
-                  <h3 className="font-semibold text-sm text-slate-900">
-                    {m.name}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    {m.desc}
-                  </p>
-                </div>
+                <h3 className="font-semibold text-slate-900 text-[15px]">
+                  {svc.title}
+                </h3>
+                <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
+                  {svc.desc}
+                </p>
+                <button
+                  type="button"
+                  className="pt-4 inline-flex items-center gap-1 text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors self-start mt-auto group/btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNavigate(svc.key);
+                  }}
+                >
+                  Selengkapnya
+                  <ArrowRight className="size-3.5 transition-transform group-hover/btn:translate-x-0.5" strokeWidth={1.75} />
+                </button>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
+      </ScrollSection>
+
+      {/* MODUL TERPADU */}
+      <ScrollSection>
+        <section className="bg-white border-y border-slate-200">
+          <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-12 sm:py-16">
+            <div className="max-w-2xl mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-blue-900">
+                Modul Terpadu SIPADUPAS
+              </h2>
+              <p className="mt-2 text-slate-500">
+                Satu platform terintegrasi yang menghubungkan seluruh kebutuhan
+                operasional Lapas dengan pelayanan publik.
+              </p>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {modules.map((m, i) => (
+                <div
+                  key={m.name}
+                  className="flex gap-3 p-4 rounded-xl bg-[#F8FAFC] border border-slate-200 hover:border-blue-900/20 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 animate-fade-in-up"
+                  style={{ animationDelay: `${i * 60}ms` }}
+                >
+                  <div className="size-10 rounded-lg bg-blue-900/5 text-blue-900 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <m.icon className="size-5" strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-sm text-slate-900">
+                      {m.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      {m.desc}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </ScrollSection>
 
       {/* ALUR LAYANAN */}
-      <section className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-12 sm:py-16">
-        <div className="max-w-2xl mb-8">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-blue-900">
-            Alur Layanan
-          </h2>
-          <p className="mt-2 text-slate-500">
-            Proses layanan SIPADUPAS dirancang sederhana dan transparan.
-          </p>
-        </div>
-        <div className="relative">
-          {/* Connector line (hidden on mobile, visible sm+) */}
-          <div className="hidden sm:block absolute top-10 left-[calc(12.5%+20px)] right-[calc(12.5%+20px)] h-0.5 bg-blue-900/10" />
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-5">
-            {processSteps.map((s, i) => (
-              <div key={s.step} className="relative flex flex-col items-center text-center">
-                {/* Step circle */}
-                <div className="relative z-10 size-20 rounded-full bg-white border-2 border-blue-900/15 flex items-center justify-center mb-4">
-                  <div className="size-12 rounded-full bg-blue-900 text-white flex items-center justify-center">
-                    <s.icon className="size-5" strokeWidth={1.75} />
-                  </div>
-                  <span className="absolute -top-1 -right-1 size-6 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center">
-                    {s.step}
-                  </span>
-                </div>
-                {/* Arrow (mobile only, between items) */}
-                {i < processSteps.length - 1 && (
-                  <div className="sm:hidden text-blue-900/20 mb-1">
-                    <ArrowRight className="size-5 rotate-90" strokeWidth={1.75} />
-                  </div>
-                )}
-                <h3 className="font-semibold text-blue-900 text-[15px]">
-                  {s.title}
-                </h3>
-                <p className="text-sm text-slate-500 mt-1.5 leading-relaxed max-w-[220px]">
-                  {s.desc}
-                </p>
-              </div>
-            ))}
+      <ScrollSection>
+        <section className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-12 sm:py-16">
+          <div className="max-w-2xl mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-blue-900">
+              Alur Layanan
+            </h2>
+            <p className="mt-2 text-slate-500">
+              Proses layanan SIPADUPAS dirancang sederhana dan transparan.
+            </p>
           </div>
-        </div>
-      </section>
+          <div className="relative">
+            <div className="hidden sm:block absolute top-10 left-[calc(12.5%+20px)] right-[calc(12.5%+20px)] h-0.5 bg-blue-900/10" />
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-5">
+              {processSteps.map((s, i) => (
+                <div key={s.step} className="relative flex flex-col items-center text-center animate-fade-in-up" style={{ animationDelay: `${i * 80}ms` }}>
+                  <div className="relative z-10 size-20 rounded-full bg-white border-2 border-blue-900/15 flex items-center justify-center mb-4 group hover:border-teal-600/40 transition-colors">
+                    <div className="size-12 rounded-full bg-blue-900 text-white flex items-center justify-center group-hover:bg-teal-600 transition-colors duration-300">
+                      <s.icon className="size-5" strokeWidth={1.75} />
+                    </div>
+                    <span className="absolute -top-1 -right-1 size-6 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center shadow-sm">
+                      {s.step}
+                    </span>
+                  </div>
+                  {i < processSteps.length - 1 && (
+                    <div className="sm:hidden text-blue-900/20 mb-1">
+                      <ArrowRight className="size-5 rotate-90" strokeWidth={1.75} />
+                    </div>
+                  )}
+                  <h3 className="font-semibold text-blue-900 text-[15px]">
+                    {s.title}
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-1.5 leading-relaxed max-w-[220px]">
+                    {s.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </ScrollSection>
 
       {/* TAGLINE STRIP */}
       <section className="bg-blue-900 text-white">
@@ -455,8 +478,25 @@ export function LandingView({ onNavigate }: LandingViewProps) {
           &ldquo;Pengamanan Terintegrasi, Pelayanan Lebih Pasti.&rdquo;
         </div>
       </section>
+    </div>
+  );
+}
 
-
+/* ------------------------------------------------------------------ */
+/*  Scroll-triggered section wrapper                                    */
+/* ------------------------------------------------------------------ */
+function ScrollSection({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref);
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "transition-all duration-700 ease-out",
+        inView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
+      )}
+    >
+      {children}
     </div>
   );
 }
@@ -467,7 +507,7 @@ export function LandingView({ onNavigate }: LandingViewProps) {
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white/5 rounded-lg px-3 py-2.5">
+    <div className="bg-white/5 rounded-lg px-3 py-2.5 hover:bg-white/10 transition-colors">
       <div className="text-[10px] text-blue-200/60 uppercase tracking-wider">
         {label}
       </div>

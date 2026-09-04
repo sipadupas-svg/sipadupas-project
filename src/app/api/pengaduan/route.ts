@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { authenticatedEndpoint } from '@/lib/security/security-pipeline'
 import { PERM_PENGADUAN_READ, PERM_PENGADUAN_CREATE } from '@/lib/security/permissions'
-import { error } from '@/lib/api-response'
+import { error, parsePagination, buildMeta } from '@/lib/api-response'
 
 function generateKodeTracking(): string {
   const now = new Date()
@@ -31,6 +31,18 @@ export const GET = authenticatedEndpoint(
       }
       if (kategori) {
         where.kategori = kategori
+      }
+
+      // Pagination opsional: ?page=&limit= → meta disertakan.
+      const wantsPagination = searchParams.get('page') || searchParams.get('limit')
+
+      if (wantsPagination) {
+        const { page, limit, skip } = parsePagination(searchParams)
+        const [total, pengaduanPage] = await Promise.all([
+          db.pengaduan.count({ where }),
+          db.pengaduan.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+        ])
+        return NextResponse.json({ data: pengaduanPage, meta: buildMeta(total, page, limit) })
       }
 
       const pengaduanList = await db.pengaduan.findMany({

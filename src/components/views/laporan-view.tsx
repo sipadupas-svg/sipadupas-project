@@ -14,6 +14,8 @@ import {
   Activity,
   ShieldCheck,
   Filter,
+  CheckCircle2,
+  AlertTriangle,
   Loader2,
 } from "lucide-react";
 import {
@@ -346,7 +348,7 @@ export function LaporanView() {
                 <KpiBlock label="Total Gangguan" value={`${gangguanData.total}`} sub="Seluruh waktu" icon={ShieldCheck} />
                 <KpiBlock label="Jenis" value={`${gangguanData.byJenis.length}`} sub="Kategori" icon={MessageSquareWarning} />
                 <KpiBlock label="Aktif" value={`${gangguanData.byStatus.filter((s) => s.status === "OPEN" || s.status === "IN_PROGRESS").reduce((a, b) => a + b.total, 0)}`} sub="Open + In Progress" icon={AlertTriangle} />
-                <KpiBlock label="Rata-rata Resolusi" value={`${gangguanData.avgResolutionHours || "N/A"}h`} sub="Selesai" icon={TrendingUp} />
+                <KpiBlock label="Tingkat" value={`${gangguanData.byTingkat.length}`} sub="Kategori tingkat" icon={Activity} />
               </div>
 
               <div className="grid lg:grid-cols-2 gap-4">

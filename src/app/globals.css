@@ -41,18 +41,18 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  /* SIPADUPAS Design Tokens from 09-ui-ux-design-system.md */
-  --color-institutional: #1e3a8a;
-  --color-institutional-light: #eff6ff;
-  --color-institutional-100: #dbeafe;
-  --color-institutional-500: #3b82f6;
-  --color-institutional-800: #1e40af;
-  --color-teal-accent: #0d9488;
-  --color-teal-accent-500: #14b8a6;
+  /* SIPADUPAS Design Tokens — Navy #061C2C + Gold #C9A227 */
+  --color-institutional: #061c2c;
+  --color-institutional-light: #f7f8fa;
+  --color-institutional-100: #0b2a3d;
+  --color-institutional-500: #0b2a3d;
+  --color-institutional-800: #c9a227;
+  --color-teal-accent: #c9a227;
+  --color-teal-accent-500: #e0c15a;
   --color-semantic-danger: #dc2626;
   --color-semantic-warning: #d97706;
   --color-semantic-success: #16a34a;
-  --color-semantic-info: #2563eb;
+  --color-semantic-info: #c9a227;
   --color-neutral-bg: #f8fafc;
   --color-neutral-surface: #ffffff;
   --color-neutral-border: #e2e8f0;
@@ -63,38 +63,38 @@
 
 :root {
   --radius: 0.5rem;
-  /* SIPADUPAS: Institutional Blue-900 primary (#1E3A8A) + Teal secondary (#0D9488) */
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* SIPADUPAS: Dark Navy primary (#061C2C) + Gold secondary (#C9A227) */
+  --background: #f7f8fa;
+  --foreground: #17212b;
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #17212b;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #1e3a8a;
+  --popover-foreground: #17212b;
+  --primary: #061c2c;
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
-  --secondary-foreground: #1e3a8a;
+  --secondary-foreground: #061c2c;
   --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #0d9488;
-  --accent-foreground: #ffffff;
+  --muted-foreground: #667085;
+  --accent: #c9a227;
+  --accent-foreground: #061c2c;
   --destructive: #dc2626;
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: #1e3a8a;
-  --chart-1: #1e3a8a;
-  --chart-2: #0d9488;
+  --ring: #c9a227;
+  --chart-1: #061c2c;
+  --chart-2: #c9a227;
   --chart-3: #d97706;
-  --chart-4: #3b82f6;
+  --chart-4: #0b2a3d;
   --chart-5: #7c3aed;
-  --sidebar: #1e3a8a;
+  --sidebar: #061c2c;
   --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #1e3a8a;
-  --sidebar-accent: #1e40af;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: #1e40af;
-  --sidebar-ring: #3b82f6;
+  --sidebar-primary: #c9a227;
+  --sidebar-primary-foreground: #061c2c;
+  --sidebar-accent: #0b2a3d;
+  --sidebar-accent-foreground: #e0c15a;
+  --sidebar-border: #0b2a3d;
+  --sidebar-ring: #c9a227;
 }
 
 .dark {
@@ -104,31 +104,31 @@
   --card-foreground: #f1f5f9;
   --popover: #1e293b;
   --popover-foreground: #f1f5f9;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
+  --primary: #c9a227;
+  --primary-foreground: #061c2c;
   --secondary: #1e293b;
-  --secondary-foreground: #f1f5f9;
+  --secondary-foreground: #e0c15a;
   --muted: #1e293b;
   --muted-foreground: #94a3b8;
-  --accent: #14b8a6;
-  --accent-foreground: #0f172a;
+  --accent: #0b2a3d;
+  --accent-foreground: #e0c15a;
   --destructive: #ef4444;
   --border: rgba(255, 255, 255, 0.1);
   --input: rgba(255, 255, 255, 0.15);
-  --ring: #3b82f6;
-  --chart-1: #3b82f6;
-  --chart-2: #14b8a6;
+  --ring: #c9a227;
+  --chart-1: #c9a227;
+  --chart-2: #061c2c;
   --chart-3: #f59e0b;
-  --chart-4: #60a5fa;
+  --chart-4: #e0c15a;
   --chart-5: #a78bfa;
   --sidebar: #0f172a;
   --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary: #c9a227;
+  --sidebar-primary-foreground: #061c2c;
   --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-accent-foreground: #e0c15a;
   --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #3b82f6;
+  --sidebar-ring: #c9a227;
 }
 
 @layer base {
@@ -151,8 +151,8 @@ h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
 /* ── Hero pattern ── */
 .hero-pattern {
   background-image:
-    radial-gradient(circle at 20% 20%, rgba(14, 184, 166, 0.15) 0, transparent 50%),
-    radial-gradient(circle at 80% 60%, rgba(30, 58, 138, 0.2) 0, transparent 50%);
+    radial-gradient(circle at 20% 20%, rgba(201, 162, 39, 0.18) 0, transparent 50%),
+    radial-gradient(circle at 80% 60%, rgba(11, 42, 61, 0.65) 0, transparent 50%);
 }
 
 /* ── Custom scrollbar ── */
@@ -161,7 +161,7 @@ h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
 .scroll-thin::-webkit-scrollbar-thumb { background-color: rgba(148, 163, 184, 0.3); border-radius: 9999px; }
 .scroll-thin::-webkit-scrollbar-thumb:hover { background-color: rgba(148, 163, 184, 0.5); }
 
-/* ── Skeleton loading (spec §18) ── */
+/* ── Skeleton loading ── */
 .skeleton-pulse {
  @apply animate-pulse bg-slate-200 rounded-md;
 }
@@ -169,7 +169,7 @@ h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
   @apply bg-slate-700;
 }
 
-/* ── High-visibility duty mode (spec §11) ── */
+/* ── High-visibility duty mode ── */
 .duty-mode {
   --background: #0f172a;
   --foreground: #f1f5f9;
@@ -182,9 +182,9 @@ h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
   --primary-foreground: #ffffff;
 }
 
-/* ── Button standard styles (spec §8.1) ── */
+/* ── Button standard styles ── */
 .btn-primary {
-  @apply bg-blue-900 hover:bg-blue-800 text-white font-medium px-4 py-2 rounded-lg shadow-sm active:scale-[0.97] transition-all duration-150;
+  @apply bg-[#061C2C] hover:bg-[#0B2A3D] text-white font-medium px-4 py-2 rounded-lg shadow-sm active:scale-[0.97] transition-all duration-150;
 }
 .btn-secondary {
   @apply border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-medium px-4 py-2 rounded-lg transition-all duration-150;
@@ -193,30 +193,30 @@ h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
   @apply bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg shadow-sm active:scale-[0.97] transition-all duration-150;
 }
 .btn-accent {
-  @apply bg-teal-600 hover:bg-teal-700 text-white font-medium px-4 py-2 rounded-lg shadow-sm active:scale-[0.97] transition-all duration-150;
+  @apply bg-[#C9A227] hover:bg-[#E0C15A] text-[#061C2C] font-medium px-4 py-2 rounded-lg shadow-sm active:scale-[0.97] transition-all duration-150;
 }
 
-/* ── Input standard style (spec §8.2) ── */
+/* ── Input standard style ── */
 .input-standard {
-  @apply w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-transparent transition-shadow;
+  @apply w-full border border-slate-300 rounded-lg px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#C9A227] focus:border-transparent transition-shadow;
 }
 .input-error {
   @apply border-red-500 focus:ring-red-500 text-red-900;
 }
 
-/* ── Card standard (spec §8.4) ── */
+/* ── Card standard ── */
 .card-standard {
   @apply bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow;
 }
 
-/* ── Badge semantic colors (spec §8.5) ── */
+/* ── Badge semantic colors ── */
 .badge-success { @apply bg-emerald-100 text-emerald-700; }
 .badge-danger { @apply bg-red-100 text-red-700; }
 .badge-warning { @apply bg-amber-100 text-amber-700; }
 .badge-info { @apply bg-blue-100 text-blue-700; }
 .badge-neutral { @apply bg-slate-100 text-slate-700; }
 
-/* ── Table standard (spec §8.5) ── */
+/* ── Table standard ── */
 .table-standard thead { @apply bg-slate-50 sticky top-0 z-10; }
 .table-standard tbody tr { @apply hover:bg-slate-50/70 transition-colors; }
 .dark .table-standard thead { @apply bg-slate-800; }
@@ -225,4 +225,147 @@ h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; }
 /* ── Safe area bottom (for bottom nav on iPhone) ── */
 .safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+}
+
+/* ── Animations ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s ease-out forwards;
+}
+
+.animate-slide-in {
+  animation: slideInRight 0.3s ease-out forwards;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
+.stagger-6 { animation-delay: 300ms; }
+
+/* ── Glassmorphism ── */
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Focus ring for keyboard navigation ── */
+*:focus-visible {
+  @apply outline-2 outline-offset-2 outline-ring;
+}
+
+/* ── SIPADUPAS Auth Page Animations ── */
+
+/* Error shake (light) */
+@keyframes authShake {
+  0%, 100% { transform: translateX(0); }
+  12.5% { transform: translateX(-4px); }
+  37.5% { transform: translateX(4px); }
+  62.5% { transform: translateX(-4px); }
+  87.5% { transform: translateX(4px); }
+}
+.animate-auth-shake {
+  animation: authShake 0.45s ease-in-out;
+}
+
+/* Success check bounce-in */
+@keyframes checkBounceIn {
+  0% { opacity: 0; transform: scale(0.3); }
+  50% { transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.animate-check-bounce {
+  animation: checkBounceIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Panel slide for auth split layout */
+@keyframes slideInFromLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-left {
+  animation: slideInFromLeft 0.5s ease-out forwards;
+}
+
+/* Form field focus glow */
+.auth-input-focus {
+  @apply transition-all duration-200;
+}
+.auth-input-focus:focus-visible {
+  @apply ring-2 ring-[#C9A227]/50 border-[#C9A227]/50;
+}
+
+/* Button press (active scale) */
+.auth-btn-active:active {
+  @apply scale-[0.97];
+}
+
+/* Panel slide transition */
+.auth-panel-transition {
+  @apply transition-transform duration-600 ease-in-out;
+}
+
+/* Stagger children animations */
+.auth-stagger > * {
+  animation-fill-mode: both;
+  animation-duration: 0.4s;
+  animation-timing-function: ease-out;
+}
+.auth-stagger > .s-1 { animation-delay: 0ms; }
+.auth-stagger > .s-2 { animation-delay: 40ms; }
+.auth-stagger > .s-3 { animation-delay: 80ms; }
+.auth-stagger > .s-4 { animation-delay: 120ms; }
+.auth-stagger > .s-5 { animation-delay: 160ms; }
+.auth-stagger > .s-6 { animation-delay: 200ms; }
+
+/* Custom scrollbar for auth forms (if needed) */
+.auth-form-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+.auth-form-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.auth-form-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 9999px;
+}
+.auth-form-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Ensure no horizontal scroll on mobile auth pages */
+.auth-page-wrapper {
+  @apply min-h-screen w-full overflow-x-hidden;
 }

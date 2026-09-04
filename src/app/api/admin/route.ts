@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { authenticatedEndpoint } from '@/lib/security/security-pipeline'
 import { PERM_ADMIN_FULL } from '@/lib/security/permissions'
+import { hashPassword } from '@/lib/auth'
 import { error } from '@/lib/api-response'
 
 // GET /api/admin — List all users with their role
@@ -76,7 +77,7 @@ export const POST = authenticatedEndpoint(
           nip,
           nama,
           email,
-          password,
+          password: await hashPassword(password),
         },
         include: {
           userRoles: {

@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { success, error } from '@/lib/api-response'
 import { sensitiveRateLimit, extractIp, extractUserAgent } from '@/lib/security/rate-limiter'
 import { loginBody, validateBody } from '@/lib/security/input-schemas'
-import { checkAccountLockout, recordLoginAttempt, LOCKOUT_DURATION_MS } from '@/lib/auth'
+import { checkAccountLockout, recordLoginAttempt, LOCKOUT_DURATION_MS, verifyPassword, hashPassword, isBcryptHash, signToken } from '@/lib/auth'
 import {
   logLoginFailed,
   logLoginSuccess,
@@ -71,8 +71,9 @@ export async function POST(request: NextRequest) {
       return error('FORBIDDEN_ACCESS', 'Akun Anda dinonaktifkan. Hubungi administrator.', 403)
     }
 
-    // Plain text comparison for demo
-    if (user.password !== password) {
+    // Verify password (bcrypt hash or legacy plain-text with auto-rehash)
+    const passwordValid = await verifyPassword(password, user.password)
+    if (!passwordValid) {
       const result = await recordLoginAttempt(nip, false, ip, ua)
       logLoginFailed(ip, ua, `Login gagal: password salah untuk NIP ${nip}`, { userId: user.id })
       if (result.locked) {
@@ -91,8 +92,16 @@ export async function POST(request: NextRequest) {
     await recordLoginAttempt(nip, true, ip, ua)
     logLoginSuccess(user.id, ip, ua)
 
-    // Generate demo token (userId-timestamp)
-    const token = `${user.id}-${Date.now()}`
+    // Generate signed access token (HMAC-SHA256, expires in 7 days)
+    const token = signToken(user.id)
+
+    // Migrate legacy plain-text password to bcrypt hash
+    if (!isBcryptHash(user.password)) {
+      await db.user.update({
+        where: { id: user.id },
+        data: { password: await hashPassword(password) },
+      })
+    }
 
     // Update last login
     await db.user.update({
@@ -124,7 +133,11 @@ export async function POST(request: NextRequest) {
           id: user.id,
           nip: user.nip,
           name: user.nama,
+          nama: user.nama,
+          email: user.email,
           role: primaryRole?.code || 'STAFF',
+          roleLabel: primaryRole?.name || 'Staff',
+          roleId: primaryRole?.id || null,
         },
       },
       'Login berhasil',

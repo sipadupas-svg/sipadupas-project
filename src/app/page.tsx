@@ -1,6 +1,8 @@
 "use client";
 
 import { AppShell } from "@/components/app-shell";
+import { Homepage } from "@/components/views/public-homepage";
+import { PublicLayout } from "@/components/views/public-layout";
 import { DashboardView } from "@/components/views/dashboard-view";
 import { PengamananView } from "@/components/views/pengamanan-view";
 import { KunjunganView } from "@/components/views/kunjungan-view";
@@ -22,6 +24,19 @@ import { KeamananView } from "@/components/views/keamanan-view";
 import { ProfilView } from "@/components/views/profil-view";
 import { BarangTitipanView } from "@/components/views/barang-titipan-view";
 import { useAppStore } from "@/lib/store";
+import type { ViewKey } from "@/lib/data";
+
+const PUBLIC_CONTENT_VIEWS: ViewKey[] = [
+  "berita",
+  "galeri",
+  "produk",
+  "tentang",
+  "skm",
+  "informasi",
+  "kunjungan",
+  "pengaduan",
+  "barangTitipan",
+];
 
 export default function Home() {
   const view = useAppStore((s) => s.view);
@@ -77,7 +92,18 @@ export default function Home() {
     }
   }
 
-  return (
+  /* Public content pages always use the premium public skin (regardless of
+     auth), matching the public dashboard. Operational/admin pages keep the
+     internal AppShell chrome. */
+  const isPublicView = PUBLIC_CONTENT_VIEWS.includes(view);
+
+  return view === "landing" ? (
+    /* Public homepage — premium redesign (standalone, full-bleed) */
+    <Homepage onNavigate={setView} />
+  ) : isPublicView ? (
+    /* Public subpages — same premium Navy+Gold skin */
+    <PublicLayout view={view}>{renderView()}</PublicLayout>
+  ) : (
     <AppShell view={view} setView={setView}>
       {renderView()}
     </AppShell>

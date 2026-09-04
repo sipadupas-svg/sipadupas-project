@@ -13,6 +13,7 @@ export const GET = authenticatedEndpoint(
     const kunjungan = await db.kunjungan.findUnique({
       where: { id },
       include: {
+        berkas: true,
         wbp: {
           select: {
             id: true,
@@ -46,7 +47,7 @@ export const PUT = authenticatedEndpoint(
 
     const existing = await db.kunjungan.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, status: true },
     })
 
     if (!existing) {
@@ -56,7 +57,17 @@ export const PUT = authenticatedEndpoint(
     const updateData: Record<string, unknown> = {}
 
     switch (action) {
+      case 'setujui':
+        if (existing.status !== 'Menunggu') {
+          return error('BAD_REQUEST', 'Hanya booking yang menunggu dapat disetujui', 400)
+        }
+        updateData.status = 'Disetujui'
+        updateData.catatanPetugas = catatanPetugas || null
+        break
       case 'checkin':
+        if (existing.status !== 'Disetujui') {
+          return error('BAD_REQUEST', 'Booking harus disetujui sebelum check-in', 400)
+        }
         updateData.status = 'Check-in'
         updateData.checkedInAt = new Date()
         break
@@ -65,6 +76,9 @@ export const PUT = authenticatedEndpoint(
         updateData.selesaiAt = new Date()
         break
       case 'tolak':
+        if (existing.status !== 'Menunggu') {
+          return error('BAD_REQUEST', 'Hanya booking yang menunggu dapat ditolak', 400)
+        }
         updateData.status = 'Ditolak'
         updateData.catatanPetugas = catatanPetugas || null
         break
@@ -78,6 +92,11 @@ export const PUT = authenticatedEndpoint(
         if (body.hubungan !== undefined) updateData.hubungan = body.hubungan
         if (body.tanggal !== undefined) updateData.tanggal = body.tanggal
         if (body.sesi !== undefined) updateData.sesi = body.sesi
+        // Petugas pelayanan dapat menghubungkan kunjungan dengan WBP terdaftar
+        // atau mengoreksi nama/nomor register WBP saat verifikasi.
+        if (body.wbpId !== undefined) updateData.wbpId = body.wbpId || null
+        if (body.namaWbp !== undefined) updateData.namaWbp = body.namaWbp || null
+        if (body.nomorRegisterWbp !== undefined) updateData.nomorRegisterWbp = body.nomorRegisterWbp || null
         break
     }
 
@@ -85,6 +104,7 @@ export const PUT = authenticatedEndpoint(
       where: { id },
       data: updateData,
       include: {
+        berkas: true,
         wbp: {
           select: {
             id: true,

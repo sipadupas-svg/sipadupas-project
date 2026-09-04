@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { NextResponse } from 'next/server'
 import { error } from '@/lib/api-response'
-
 // ---------------------------------------------------------------------------
 // Reusable validators
 // ---------------------------------------------------------------------------
@@ -37,10 +36,14 @@ export const kunjunganCreateBody = z.object({
   noHp: phoneSchema,
   email: emailSchema.optional(),
   hubunganWbp: z.string().min(1, 'Hubungan dengan WBP wajib diisi').max(100, 'Hubungan maksimal 100 karakter'),
-  wbpId: z.string().min(1, 'WBP ID wajib diisi'),
+  // Tidak perlu memilih WBP dari daftar — pemohon cukup menuliskan nama WBP.
+  // Verifikasi & pencocokan data WBP dilakukan petugas pelayanan saat kunjungan.
+  namaWbp: z.string().min(3, 'Nama WBP yang dikunjungi wajib diisi').max(200, 'Nama WBP maksimal 200 karakter'),
+  nomorRegisterWbp: z.string().max(100, 'Nomor register maksimal 100 karakter').optional(),
   tanggalKunjungan: z.string().min(1, 'Tanggal kunjungan wajib diisi'),
   keperluan: z.string().min(1, 'Keperluan kunjungan wajib diisi').max(500, 'Keperluan maksimal 500 karakter'),
   jumlahPengunjung: z.number().int().min(1, 'Jumlah pengunjung minimal 1').max(10, 'Jumlah pengunjung maksimal 10'),
+  sesi: z.enum(['SESI_PAGI', 'SESI_SIANG']).optional(),
   catatan: z.string().max(1000, 'Catatan maksimal 1000 karakter').optional(),
 })
 
@@ -64,7 +67,10 @@ export const barangTitipanCreateBody = z.object({
   namaPengirim: z.string().min(1, 'Nama pengirim wajib diisi').max(200, 'Nama pengirim maksimal 200 karakter'),
   nik: nikSchema,
   noHp: phoneSchema,
-  wbpId: z.string().min(1, 'WBP ID wajib diisi'),
+  // Tidak perlu memilih WBP dari daftar — pengirim cukup menuliskan nama WBP.
+  // Verifikasi & pencocokan data WBP dilakukan petugas saat barang diantar.
+  namaWbp: z.string().min(3, 'Nama WBP tujuan wajib diisi').max(200, 'Nama WBP maksimal 200 karakter'),
+  nomorRegisterWbp: z.string().max(100, 'Nomor register maksimal 100 karakter').optional(),
   jenisBarang: z.string().min(1, 'Jenis barang wajib diisi').max(200, 'Jenis barang maksimal 200 karakter'),
   deskripsi: z.string().min(1, 'Deskripsi wajib diisi').max(1000, 'Deskripsi maksimal 1000 karakter'),
   jumlah: z.number().int().min(1, 'Jumlah minimal 1'),

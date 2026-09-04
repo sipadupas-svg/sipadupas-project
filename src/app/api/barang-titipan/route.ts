@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { authenticatedEndpoint } from '@/lib/security/security-pipeline'
-import { PERM_BARANG_TITIPAN_CREATE, PERM_BARANG_TITIPAN_READ } from '@/lib/security/permissions'
+import { authenticatedEndpoint, publicEndpoint } from '@/lib/security/security-pipeline'
+import { PERM_BARANG_TITIPAN_READ } from '@/lib/security/permissions'
 import { success, created, error, parsePagination, buildMeta } from '@/lib/api-response'
+import { qrImageUrl } from '@/lib/qr'
 import { Prisma } from '@prisma/client'
 
 async function generateKodeTitipan(): Promise<string> {
@@ -27,16 +28,19 @@ async function generateKodeTitipan(): Promise<string> {
   return `${prefix}-${String(nextNum).padStart(3, '0')}`
 }
 
-// POST /api/barang-titipan — Create barang titipan (authenticated)
-export const POST = authenticatedEndpoint(
-  [PERM_BARANG_TITIPAN_CREATE],
-  async (request: NextRequest, auth) => {
+// POST /api/barang-titipan — Create barang titipan (public: visitors submit without login)
+// Sama seperti kunjungan online: pengirim tidak perlu memilih WBP dari daftar,
+// cukup menuliskan nama WBP. Verifikasi & pencocokan dilakukan petugas.
+export const POST = publicEndpoint(
+  async (request: NextRequest) => {
     const body = await request.json()
     const {
       nama_pengirim,
       nik_pengirim,
       no_hp,
       hubungan,
+      nama_wbp,
+      nomor_register_wbp,
       wbp_id,
       kategori,
       tanggal_penitipan,
@@ -48,6 +52,8 @@ export const POST = authenticatedEndpoint(
       nik_pengirim?: string
       no_hp?: string
       hubungan?: string
+      nama_wbp?: string
+      nomor_register_wbp?: string
       wbp_id?: string
       kategori?: string
       tanggal_penitipan?: string
@@ -57,8 +63,8 @@ export const POST = authenticatedEndpoint(
     }
 
     // Validate required fields
-    if (!nama_pengirim || !hubungan || !wbp_id || !tanggal_penitipan) {
-      return error('BAD_REQUEST', 'nama_pengirim, hubungan, wbp_id, dan tanggal_penitipan wajib diisi', 400)
+    if (!nama_pengirim || !hubungan || !nama_wbp || !tanggal_penitipan) {
+      return error('BAD_REQUEST', 'nama_pengirim, hubungan, nama_wbp, dan tanggal_penitipan wajib diisi', 400)
     }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -72,67 +78,76 @@ export const POST = authenticatedEndpoint(
       }
     }
 
-    // Verify WBP exists and is Aktif
-    const wbp = await db.wBP.findUnique({
-      where: { id: wbp_id },
-      select: { id: true, nama: true, status: true },
-    })
-
-    if (!wbp) {
-      return error('NOT_FOUND', 'Data WBP tidak ditemukan', 404)
-    }
-
-    if (wbp.status !== 'Aktif') {
-      return error('BAD_REQUEST', `WBP dengan status "${wbp.status}" tidak dapat menerima titipan barang`, 400)
-    }
-
-    const kodeTitipan = await generateKodeTitipan()
-
-    // Create BarangTitipan + ItemBarang in a transaction
-    let barangTitipan: Awaited<ReturnType<typeof db.barangTitipan.create>>
-    try {
-      barangTitipan = await db.$transaction(async (tx) => {
-        const created = await tx.barangTitipan.create({
-          data: {
-            kodeTitipan,
-            namaPengirim: nama_pengirim,
-            nikPengirim: nik_pengirim || null,
-            noHp: no_hp || null,
-            hubungan,
-            wbpId: wbp_id,
-            kategori: kategori || 'Lainnya',
-            tanggalPenitipan: tanggal_penitipan,
-            jamPenitipan: jam_penitipan || null,
-            catatanPengirim: catatan_pengirim || null,
-            status: 'Menunggu',
-            items: {
-              create: items.map((item) => ({
-                namaBarang: item.nama_barang,
-                jumlah: item.jumlah || 1,
-                satuan: item.satuan || 'pcs',
-                keterangan: item.keterangan || null,
-                status: 'Menunggu',
-              })),
+    // Create BarangTitipan + ItemBarang in a transaction.
+    // Auto-retry jika kode titipan bentrok (race condition generator kode).
+    let createdResult: {
+      kodeTitipan: string
+      status: string
+      tanggalPenitipan: string
+      jumlahItem: number
+    } | undefined
+    let kodeTitipan = await generateKodeTitipan()
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        createdResult = await db.$transaction(async (tx) => {
+          const created = await tx.barangTitipan.create({
+            data: {
+              kodeTitipan,
+              namaPengirim: nama_pengirim,
+              nikPengirim: nik_pengirim || null,
+              noHp: no_hp || null,
+              hubungan,
+              namaWbp: String(nama_wbp).trim(),
+              nomorRegisterWbp: nomor_register_wbp ? String(nomor_register_wbp).trim() : null,
+              wbpId: wbp_id || null,
+              kategori: kategori || 'Lainnya',
+              tanggalPenitipan: tanggal_penitipan,
+              jamPenitipan: jam_penitipan || null,
+              catatanPengirim: catatan_pengirim || null,
+              status: 'Menunggu',
+              items: {
+                create: items.map((item) => ({
+                  namaBarang: item.nama_barang,
+                  jumlah: item.jumlah || 1,
+                  satuan: item.satuan || 'pcs',
+                  keterangan: item.keterangan || null,
+                  status: 'Menunggu',
+                })),
+              },
             },
-          },
-          include: { items: true },
+            include: { items: true },
+          })
+          return {
+            kodeTitipan: created.kodeTitipan,
+            status: created.status,
+            tanggalPenitipan: created.tanggalPenitipan,
+            jumlahItem: created.items.length,
+          }
         })
-        return created
-      })
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        return error('CONFLICT', 'Gagal membuat kode titipan, silakan coba lagi', 409)
+        break
+      } catch (err) {
+        const isCollision =
+          err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+        if (!isCollision || attempt === 2) throw err
+        kodeTitipan = await generateKodeTitipan()
       }
-      throw err
+    }
+
+    if (!createdResult) {
+      return error('CONFLICT', 'Gagal membuat kode titipan, silakan coba lagi', 409)
     }
 
     return created({
-      kode_titipan: barangTitipan.kodeTitipan,
-      status: barangTitipan.status,
-      tracking_url: `/barang-titipan/lacak?kode=${barangTitipan.kodeTitipan}`,
-      nama_wbp: wbp.nama,
-      jumlah_item: barangTitipan.items.length,
-      tanggal_penitipan: barangTitipan.tanggalPenitipan,
+      kode_titipan: createdResult.kodeTitipan,
+      status: createdResult.status,
+      tracking_url: `/barang-titipan/lacak?kode=${createdResult.kodeTitipan}`,
+      qr_code_url: qrImageUrl(createdResult.kodeTitipan),
+      nama_wbp: String(nama_wbp).trim(),
+      nomor_register_wbp: nomor_register_wbp ? String(nomor_register_wbp).trim() : null,
+      jumlah_item: createdResult.jumlahItem,
+      tanggal_penitipan: createdResult.tanggalPenitipan,
+      message:
+        'Penitipan berhasil didaftarkan. Simpan kode titipan & barcode ini, tunjukkan kepada petugas saat mengantar barang untuk diverifikasi.',
     }, 'Penitipan barang berhasil didaftarkan')
   },
 )
@@ -206,17 +221,21 @@ export const GET = authenticatedEndpoint(
       nama_pengirim: r.namaPengirim,
       no_hp: r.noHp,
       hubungan: r.hubungan,
+      nama_wbp: r.namaWbp || r.wbp?.nama || null,
+      nomor_register_wbp: r.nomorRegisterWbp || r.wbp?.nomorRegister || null,
       kategori: r.kategori,
       tanggal_penitipan: r.tanggalPenitipan,
       status: r.status,
-      wbp: {
-        id: r.wbp.id,
-        nomor_register: r.wbp.nomorRegister,
-        nama: r.wbp.nama,
-        status: r.wbp.status,
-        blok: r.wbp.currentRoom?.blockName || null,
-        kamar: r.wbp.currentRoom?.roomNumber || null,
-      },
+      wbp: r.wbp
+        ? {
+            id: r.wbp.id,
+            nomor_register: r.wbp.nomorRegister,
+            nama: r.wbp.nama,
+            status: r.wbp.status,
+            blok: r.wbp.currentRoom?.blockName || null,
+            kamar: r.wbp.currentRoom?.roomNumber || null,
+          }
+        : null,
       verified_by: r.verifiedBy
         ? { id: r.verifiedBy.id, nama: r.verifiedBy.nama, nip: r.verifiedBy.nip }
         : null,

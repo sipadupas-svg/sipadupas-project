@@ -703,7 +703,7 @@ function KehadiranTab() {
   }, [selectedProgram, tanggal, refreshKey]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     doFetch();
   }, [doFetch]);
 

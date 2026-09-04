@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { publicEndpoint } from '@/lib/security/security-pipeline'
 import { pengaduanCreateBody } from '@/lib/security/input-schemas'
-import { created } from '@/lib/api-response'
+import { error, created } from '@/lib/api-response'
 import type { PengaduanCreateBody } from '@/lib/security/input-schemas'
 
 function generateTrackingCode(): string {
@@ -18,8 +18,11 @@ function generateTrackingCode(): string {
 }
 
 // POST /api/public/complaints — Public complaint submission (no auth required)
-export const POST = publicEndpoint(
-  async (request: NextRequest, _auth, body: PengaduanCreateBody) => {
+export const POST = publicEndpoint<PengaduanCreateBody>(
+  async (request: NextRequest, _auth, body) => {
+    if (!body) {
+      return error('BAD_REQUEST', 'Body request tidak boleh kosong', 400)
+    }
     const kodeTracking = generateTrackingCode()
 
     const pengaduan = await db.pengaduan.create({

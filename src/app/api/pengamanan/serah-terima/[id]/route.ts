@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/security/security-pipeline'
+import { PERM_SERAH_TERIMA } from '@/lib/security/permissions'
 
 // GET /api/pengamanan/serah-terima/[id] — Get single serah terima
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(request, [PERM_SERAH_TERIMA])
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { id } = await params
 
@@ -40,6 +45,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(request, [PERM_SERAH_TERIMA])
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { id } = await params
     const body = await request.json()

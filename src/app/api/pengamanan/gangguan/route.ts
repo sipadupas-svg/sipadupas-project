@@ -40,7 +40,7 @@ export const GET = authenticatedEndpoint(
 // POST /api/pengamanan/gangguan — Create gangguan (UF-07)
 export const POST = authenticatedEndpoint(
   [PERM_GANGGUAN_CREATE],
-  async (request: NextRequest, _auth) => {
+  async (request: NextRequest, auth) => {
     try {
       const body = await request.json()
       const {
@@ -53,7 +53,6 @@ export const POST = authenticatedEndpoint(
         kronologi,
         tindakanAwal,
         wbpTerlibat,
-        reporterId,
       } = body
 
       if (!jenis) {
@@ -77,7 +76,8 @@ export const POST = authenticatedEndpoint(
               ? wbpTerlibat
               : JSON.stringify(wbpTerlibat)
             : null,
-          reporterId: reporterId || null,
+          // Reporter SELALU user yang login — cegah atribusi palsu via body
+          reporterId: auth.userId,
           status: 'OPEN',
         },
         include: {

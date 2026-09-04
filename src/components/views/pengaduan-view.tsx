@@ -477,7 +477,7 @@ function PengaduanDetail({ p, onClose, onRefresh }: { p: PengaduanItem; onClose:
                 <ShieldCheck className="size-3 mr-1" /> Verifikasi
               </Button>
             )}
-            {(p.status === "Diverifikasi" || p.status === "Diproses") && p.status !== "Selesai" && (
+            {(p.status === "Diverifikasi" || p.status === "Diproses") && (
               <Button size="sm" variant="outline" disabled={actionLoading} onClick={() => handleAction("proses")}>
                 {actionLoading && <Loader2 className="size-3 mr-1 animate-spin" />}
                 <Loader2 className="size-3 mr-1" /> Proses

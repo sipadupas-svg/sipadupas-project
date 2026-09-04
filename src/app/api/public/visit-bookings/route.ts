@@ -1,13 +1,15 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 import { publicEndpoint } from '@/lib/security/security-pipeline'
 import { kunjunganCreateBody } from '@/lib/security/input-schemas'
+import { qrImageUrl } from '@/lib/qr'
 import { error, created } from '@/lib/api-response'
 import type { KunjunganCreateBody } from '@/lib/security/input-schemas'
 
 const SESI_MAP: Record<string, string> = {
-  SESI_PAGI: 'Sesi 1 Pagi',
-  SESI_SIANG: 'Sesi 2 Siang',
+  SESI_PAGI: 'Sesi Pagi',
+  SESI_SIANG: 'Sesi Siang',
 }
 
 function generateBookingCode(): string {
@@ -15,50 +17,50 @@ function generateBookingCode(): string {
   return `BK-${rand}`
 }
 
-// POST /api/public/visit-bookings — Public visit booking (no auth required)
-export const POST = publicEndpoint(
-  async (request: NextRequest, _auth, body: KunjunganCreateBody) => {
-    // Find WBP by ID
-    const wbp = await db.wBP.findUnique({
-      where: { id: body.wbpId },
-      select: { id: true, nama: true, status: true },
-    })
-
-    if (!wbp) {
-      return error('NOT_FOUND', 'WBP tidak ditemukan', 404)
+/** Create booking dengan retry otomatis jika kodeBooking bentrok (P2002). */
+async function createBookingWithRetry(data: Prisma.KunjunganCreateInput, attempts = 3) {
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await db.kunjungan.create({
+        data: attempt === 0 ? data : { ...data, kodeBooking: generateBookingCode() },
+      })
+    } catch (err) {
+      lastError = err
+      const isCollision =
+        err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+      if (!isCollision) throw err
     }
+  }
+  throw lastError
+}
 
-    if (wbp.status !== 'Aktif') {
-      return error('BAD_REQUEST', 'WBP tidak dalam status aktif untuk dikunjungi', 400)
+// POST /api/public/visit-bookings — Public visit booking (no auth required)
+// Pemohon tidak perlu memilih WBP dari daftar; cukup menuliskan nama WBP.
+// Verifikasi data & pencocokan WBP dilakukan petugas pelayanan saat kunjungan (scan barcode).
+export const POST = publicEndpoint<KunjunganCreateBody>(
+  async (request: NextRequest, _auth, body) => {
+    if (!body) {
+      return error('BAD_REQUEST', 'Body request tidak boleh kosong', 400)
     }
 
     const kodeBooking = generateBookingCode()
-    const sesi = SESI_MAP['SESI_PAGI'] || 'Sesi 1 Pagi'
+    // Hormati sesi yang dipilih pemohon (sebelumnya selalu hardcode Sesi Pagi)
+    const sesi = SESI_MAP[body.sesi ?? ''] || 'Sesi Pagi'
 
-    const kunjungan = await db.kunjungan.create({
-      data: {
-        kodeBooking,
-        namaPemohon: body.namaPengunjung,
-        nikPemohon: body.nik,
-        noHp: body.noHp,
-        hubungan: body.hubunganWbp,
-        wbpId: body.wbpId,
-        tanggal: body.tanggalKunjungan,
-        sesi,
-        keperluan: body.keperluan,
-        jumlahPengunjung: body.jumlahPengunjung,
-        catatan: body.catatan || null,
-        status: 'Menunggu',
-      },
-      include: {
-        wbp: {
-          select: {
-            id: true,
-            nama: true,
-            nomorRegister: true,
-          },
-        },
-      },
+    const kunjungan = await createBookingWithRetry({
+      kodeBooking,
+      namaPemohon: body.namaPengunjung,
+      nikPemohon: body.nik,
+      noHp: body.noHp,
+      hubungan: body.hubunganWbp,
+      namaWbp: body.namaWbp.trim(),
+      nomorRegisterWbp: body.nomorRegisterWbp ? body.nomorRegisterWbp.trim() : null,
+      tanggal: body.tanggalKunjungan,
+      sesi,
+      keperluan: body.keperluan,
+      catatanPetugas: body.catatan || null,
+      status: 'Menunggu',
     })
 
     return created({
@@ -66,10 +68,12 @@ export const POST = publicEndpoint(
       visit_date: kunjungan.tanggal,
       session_time: kunjungan.sesi,
       visitor_name: kunjungan.namaPemohon,
-      inmate_name: kunjungan.wbp.nama,
-      inmate_registration_number: kunjungan.wbp.nomorRegister,
+      inmate_name: kunjungan.namaWbp,
+      inmate_registration_number: kunjungan.nomorRegisterWbp,
       status: kunjungan.status,
-      qr_code_url: `https://api.sipadupas-lapasbontang.go.id/qr/${kunjungan.kodeBooking}.png`,
+      qr_code_url: qrImageUrl(kunjungan.kodeBooking),
+      message:
+        'Pendaftaran berhasil. Simpan Nomor Booking & barcode ini, tunjukkan kepada petugas pendaftaran saat datang untuk diverifikasi.',
     }, 'Pendaftaran kunjungan berhasil')
   },
   { validateBody: kunjunganCreateBody },

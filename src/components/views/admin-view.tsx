@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useAppStore } from "@/lib/store";
 import {
   Settings,
   Users,
@@ -24,6 +25,7 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  ImagePlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -187,6 +189,18 @@ export function AdminView() {
 
   // System Settings state (keep from data.ts)
   const [sysSettings, setSysSettings] = useState<SystemSetting[]>(JSON.parse(JSON.stringify(_dataSystemSettings)));
+
+  // Hero image state
+  const heroFileRef = useRef<HTMLInputElement>(null);
+  const [heroImage, setHeroImage] = useState<string | null>(null);
+  const [heroLoading, setHeroLoading] = useState(true);
+  const [heroSaving, setHeroSaving] = useState(false);
+
+  // Running text state
+  const [rtText, setRtText] = useState("");
+  const [rtActive, setRtActive] = useState(false);
+  const [rtLoading, setRtLoading] = useState(true);
+  const [rtSaving, setRtSaving] = useState(false);
 
   // ---- Fetch Users ----
   const fetchUsers = useCallback(async () => {
@@ -493,6 +507,111 @@ export function AdminView() {
   const saveSystemSettings = useCallback(() => {
     toast.success("Pengaturan sistem berhasil disimpan");
   }, []);
+
+  // ---- Hero image handlers ----
+  const fetchHero = useCallback(async () => {
+    try {
+      setHeroLoading(true);
+      const token = useAppStore.getState().currentUser?.token;
+      const res = await fetch("/api/admin/hero", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      if (json.success) setHeroImage(json.data?.heroImage ?? null);
+    } catch {
+      toast.error("Gagal memuat foto hero");
+    } finally {
+      setHeroLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchHero(); }, [fetchHero]);
+
+  const handleHeroFile = useCallback((file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("File harus berupa gambar (PNG/JPG/WebP)");
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error("Ukuran gambar maksimal 3MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setHeroImage(typeof reader.result === "string" ? reader.result : null);
+    reader.onerror = () => toast.error("Gagal membaca file");
+    reader.readAsDataURL(file);
+  }, []);
+
+  const saveHero = useCallback(async () => {
+    if (!heroImage) {
+      toast.error("Pilih foto terlebih dahulu");
+      return;
+    }
+    try {
+      setHeroSaving(true);
+      const token = useAppStore.getState().currentUser?.token;
+      const res = await fetch("/api/admin/hero", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ gambar: heroImage }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json?.error?.message ?? "Gagal menyimpan foto hero");
+      toast.success("Foto hero berhasil disimpan dan langsung tampil di halaman publik");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menyimpan foto hero");
+    } finally {
+      setHeroSaving(false);
+    }
+  }, [heroImage]);
+
+  // ---- Running text handlers ----
+  const fetchRunningText = useCallback(async () => {
+    try {
+      setRtLoading(true);
+      const token = useAppStore.getState().currentUser?.token;
+      const res = await fetch("/api/admin/running-text", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      if (json.success) {
+        setRtText(json.data?.teks ?? "");
+        setRtActive(Boolean(json.data?.aktif));
+      }
+    } catch {
+      toast.error("Gagal memuat pengaturan running text");
+    } finally {
+      setRtLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchRunningText(); }, [fetchRunningText]);
+
+  const saveRunningText = useCallback(async () => {
+    if (rtActive && !rtText.trim()) {
+      toast.error("Teks tidak boleh kosong jika running text diaktifkan");
+      return;
+    }
+    try {
+      setRtSaving(true);
+      const token = useAppStore.getState().currentUser?.token;
+      const res = await fetch("/api/admin/running-text", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ teks: rtText.trim(), aktif: rtActive }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json?.error?.message ?? "Gagal menyimpan running text");
+      toast.success("Running text berhasil disimpan");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal menyimpan running text");
+    } finally {
+      setRtSaving(false);
+    }
+  }, [rtText, rtActive]);
 
   const currentMasterItems = selectedMasterIdx !== null ? masterData[selectedMasterIdx] : null;
 
@@ -917,6 +1036,84 @@ export function AdminView() {
 
         {/* ========== SYSTEM SETTINGS TAB ========== */}
         <TabsContent value="system" className="space-y-4">
+          <SectionCard title="Foto Hero Website" description="Foto utama yang tampil di hero section halaman publik">
+            {heroLoading ? (
+              <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30">
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : heroImage ? (
+              <div className="overflow-hidden rounded-xl border border-border">
+                <img src={heroImage} alt="Foto hero saat ini" className="h-44 w-full object-cover" />
+              </div>
+            ) : (
+              <div className="flex h-44 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 text-muted-foreground">
+                <ImagePlus className="size-8" />
+                <p className="text-xs">Belum ada foto hero</p>
+              </div>
+            )}
+            <input
+              ref={heroFileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                handleHeroFile(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => heroFileRef.current?.click()}>
+                <ImagePlus className="size-4 mr-1.5" /> Pilih Foto
+              </Button>
+              <Button size="sm" onClick={saveHero} disabled={heroSaving || !heroImage}>
+                {heroSaving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Save className="size-4 mr-1.5" />}
+                Simpan Foto Hero
+              </Button>
+              <span className="text-[11px] text-muted-foreground">PNG/JPG/WebP · maksimal 3MB · disarankan landscape 16:9</span>
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Running Text Beranda" description="Teks berjalan (marquee) di halaman publik SIPADUPAS">
+            {rtLoading ? (
+              <div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="running-text-active" className="text-sm font-medium cursor-pointer">
+                    Aktifkan Running Text
+                  </Label>
+                  <Switch id="running-text-active" checked={rtActive} onCheckedChange={setRtActive} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="running-text-input" className="text-xs text-muted-foreground">Isi Teks (maks. 300 karakter)</Label>
+                  <Input
+                    id="running-text-input"
+                    value={rtText}
+                    onChange={(e) => setRtText(e.target.value.slice(0, 300))}
+                    placeholder="Contoh: Selamat datang di portal resmi Lapas Kelas IIA Bontang"
+                    disabled={!rtActive}
+                    maxLength={300}
+                  />
+                  <p className="text-[11px] text-muted-foreground">{rtText.length}/300 karakter</p>
+                </div>
+                {rtActive && rtText.trim() && (
+                  <div className="overflow-hidden rounded-lg border border-[#C9A227]/30 bg-[#C9A227]/10 py-2">
+                    <p className="whitespace-nowrap text-sm font-medium text-[#061C2C]">📢 {rtText}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={saveRunningText} disabled={rtSaving || rtLoading}>
+                {rtSaving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Save className="size-4 mr-1.5" />}
+                Simpan Running Text
+              </Button>
+              <span className="text-[11px] text-muted-foreground">Tampil sebagai bar berjalan di atas hero beranda publik</span>
+            </div>
+          </SectionCard>
+
           <div className="grid lg:grid-cols-2 gap-4">
             {sysSettings.map((cat, catIdx) => (
               <SectionCard key={cat.kategori} title={cat.kategori} description="Konfigurasi sistem">

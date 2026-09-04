@@ -83,7 +83,7 @@ export function InformasiView() {
   const pbLayanan = layananList.filter((l) => l.kategori === "PB");
   const cbLayanan = layananList.filter((l) => l.kategori === "CB");
   const cmbLayanan = layananList.filter((l) => l.kategori === "CMB");
-  const otherLayanan = layananList.filter((l) => !"PBCBMB".includes(l.kategori));
+  const otherLayanan = layananList.filter((l) => !["PB", "CB", "CMB"].includes(l.kategori));
 
   // Collect all FAQs
   const allFaqs: FAQItem[] = [];

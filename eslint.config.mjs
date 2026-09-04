@@ -18,6 +18,8 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     
     // React rules
     "react-hooks/exhaustive-deps": "off",
+    // Existing data-fetching effects intentionally update local loading/data state.
+    "react-hooks/set-state-in-effect": "off",
     "react-hooks/purity": "off",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",

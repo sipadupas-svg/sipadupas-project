@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "SIPADUPAS",
   },
-  icons: { icon: "/logo.svg" },
+  icons: { icon: "/logo.png" },
   openGraph: {
     title: "SIPADUPAS — Lapas Kelas IIA Bontang",
     description:
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1e3a8a",
+  themeColor: "#061C2C",
   width: "device-width",
   initialScale: 1,
 };

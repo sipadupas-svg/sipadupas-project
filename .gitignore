@@ -52,3 +52,19 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# ── SIPADUPAS: build/lint output & local artifacts ──────────────────
+*.zip
+buildout.txt
+build-current.txt
+lint*.txt
+tscheck*.txt
+tsout*.txt
+tsc-results.txt
+eslint-results.txt
+fix-errors.mjs
+git-version-*.txt
+
+# SQLite local database (jangan di-commit untuk deployment)
+prisma/db
+/db

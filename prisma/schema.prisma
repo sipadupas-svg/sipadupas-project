@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -24,6 +24,13 @@ model User {
   password    String    // password_hash in ERD, plain text for demo
   jabatan     String?
   noHp        String?
+  // Self-registration & approval flow (UF-01A)
+  requestedRole    String?   // role requested by petugas (SECURITY_OFFICER, COACHING_OFFICER, etc.)
+  accountStatus    String?   // PENDING / APPROVED / REJECTED — null for admin-created accounts
+  statusReason     String?   // reason for rejection or notes
+  approvedById     String?   // who approved/rejected the account
+  approvedAt       DateTime? // when the account was approved/rejected
+  accountApprovedBy User?    @relation("AccountApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
   isActive    Boolean   @default(true)
   lastLoginAt DateTime?
   createdAt   DateTime  @default(now())
@@ -31,6 +38,8 @@ model User {
 
   // M:N with Role via UserRole junction
   userRoles          UserRole[]
+  // Accounts approved/rejected by this user
+  approvedAccounts   User[]    @relation("AccountApprovedBy")
   // Direct relations
   auditLogs          AuditLog[]
   serahTerimaDari    SerahTerima[]  @relation("SerahTerimaDari")
@@ -43,6 +52,7 @@ model User {
 
   @@index([nip])
   @@index([isActive])
+  @@index([accountStatus])
 }
 
 model Role {
@@ -305,7 +315,7 @@ model WBPRawatInap {
 // ──────────────────────────────────────────────
 
 model WBPKerjaLuar {
-  id              String    @id @default(cuid())
+  id              String   @id @default(cuid())
   wbpId           String
   kegiatan        String
   lokasi          String?
@@ -315,8 +325,8 @@ model WBPKerjaLuar {
   petugasPengawal String?
   keterlambatan   Boolean   @default(false)
   status          String    @default("AKTIF") // AKTIF, KEMBALI, TERLAMBAT
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   wbp WBP @relation(fields: [wbpId], references: [id])
 
@@ -335,9 +345,17 @@ model Kunjungan {
   noHp          String?
   alamat        String?
   hubungan      String
-  wbpId         String
+  // Kunjungan tidak lagi wajib memilih WBP terdaftar saat booking online.
+  // Petugas pelayanan yang memverifikasi & menghubungkan kunjungan dengan WBP saat check-in.
+  wbpId         String?
+  namaWbp       String?   // Nama WBP yang dikunjungi (diisi pemohon, teks bebas)
+  nomorRegisterWbp String? // Nomor register WBP (opsional, jika diketahui pemohon)
   tanggal       String    // YYYY-MM-DD
   sesi          String    // Sesi 1 Pagi, Sesi 2 Siang, etc.
+  keperluan     String?
+  jenisIdentitas String?
+  setujuPersyaratan Boolean @default(false)
+  persetujuanAt DateTime?
   status        String    @default("Menunggu") // Menunggu, Disetujui, Check-in, Selesai, Ditolak
   checkedInAt   DateTime?
   selesaiAt     DateTime?
@@ -345,11 +363,28 @@ model Kunjungan {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  wbp WBP @relation(fields: [wbpId], references: [id])
+  wbp WBP? @relation(fields: [wbpId], references: [id])
+  berkas KunjunganBerkas[]
 
   @@index([tanggal, status])
   @@index([kodeBooking])
   @@index([wbpId])
+}
+
+model KunjunganBerkas {
+  id          String   @id @default(cuid())
+  kunjunganId String
+  jenis       String   // IDENTITAS atau SELFIE
+  namaFile    String
+  mimeType    String
+  ukuran      Int
+  data        String   // data URL; dibatasi dan divalidasi di API
+  createdAt   DateTime @default(now())
+
+  kunjungan Kunjungan @relation(fields: [kunjunganId], references: [id], onDelete: Cascade)
+
+  @@index([kunjunganId])
+  @@index([jenis])
 }
 
 // ──────────────────────────────────────────────
@@ -526,7 +561,11 @@ model BarangTitipan {
   nikPengirim       String?
   noHp              String?
   hubungan          String    // Istri, Anak, Saudara, Orang Tua, Lainnya
-  wbpId             String
+  // Sama seperti Kunjungan: tidak wajib memilih WBP terdaftar.
+  // Petugas memverifikasi & menghubungkan data WBP saat proses verifikasi barang.
+  wbpId             String?
+  namaWbp           String?   // Nama WBP tujuan (teks bebas dari pengirim)
+  nomorRegisterWbp  String?   // Nomor register WBP (opsional, jika diketahui)
   kategori          String    @default("Lainnya") // Pakaian, Makanan, Obat-obatan, Kebutuhan Sehari-hari, Lainnya
   tanggalPenitipan  String    // YYYY-MM-DD
   jamPenitipan      String?   // HH:MM
@@ -541,7 +580,7 @@ model BarangTitipan {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  wbp         WBP      @relation(fields: [wbpId], references: [id])
+  wbp         WBP?     @relation(fields: [wbpId], references: [id])
   verifiedBy  User?    @relation("BarangVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
   items       ItemBarang[]
 
@@ -596,7 +635,7 @@ model LoginAttempt {
   success      Boolean   @default(false)
   lockedUntil  DateTime? // If account is locked, when it unlocks
   failCount    Int       @default(0) // Current consecutive failures
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime @default(now())
 
   @@index([nip])
   @@index([ipAddress])

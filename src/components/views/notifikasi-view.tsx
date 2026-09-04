@@ -60,6 +60,8 @@ function getTimeAgo(iso: string): string {
   }
 }
 
+import { useAppStore } from "@/lib/store";
+
 function getPriority(jenis: string | null, judul: string): string {
   if (jenis === "urgent" || judul.toLowerCase().includes("gangguan") || judul.toLowerCase().includes("darurat")) return "Tinggi";
   if (jenis === "info" || jenis === null) return "Rendah";
@@ -76,11 +78,19 @@ export function NotifikasiView() {
   const [items, setItems] = useState<NotifikasiItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const token = useAppStore((s) => s.currentUser?.token);
+
+  const authHeaders = useCallback(
+    () => ({ Authorization: `Bearer ${token}` }),
+    [token],
+  );
 
   const fetchNotifikasi = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/notifikasi");
+      const res = await fetch("/api/notifikasi", {
+        headers: authHeaders(),
+      });
       if (!res.ok) throw new Error();
       const json = await res.json();
       setItems(json.data || []);
@@ -90,7 +100,7 @@ export function NotifikasiView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authHeaders]);
 
   useEffect(() => {
     fetchNotifikasi();
@@ -105,7 +115,7 @@ export function NotifikasiView() {
     try {
       const res = await fetch("/api/notifikasi", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ ids: unreadIds }),
       });
       if (!res.ok) throw new Error();
@@ -121,7 +131,7 @@ export function NotifikasiView() {
     try {
       const res = await fetch("/api/notifikasi", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ ids: [id] }),
       });
       if (!res.ok) throw new Error();

@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/security/security-pipeline'
+import { PERM_GANGGUAN_READ, PERM_GANGGUAN_UPDATE } from '@/lib/security/permissions'
 
 // GET /api/pengamanan/gangguan/[id] — Get single gangguan (UF-08)
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(request, [PERM_GANGGUAN_READ])
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { id } = await params
 
@@ -25,8 +30,8 @@ export async function GET(
     }
 
     return NextResponse.json({ data: gangguan })
-  } catch (error) {
-    console.error('[GET /api/pengamanan/gangguan/:id] Error:', error)
+  } catch (err) {
+    console.error('[GET /api/pengamanan/gangguan/:id] Error:', err)
     return NextResponse.json(
       { error: 'Gagal mengambil data gangguan' },
       { status: 500 },
@@ -39,6 +44,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(request, [PERM_GANGGUAN_UPDATE])
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { id } = await params
     const body = await request.json()

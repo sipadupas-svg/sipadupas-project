@@ -758,3 +758,80 @@ Stage Summary:
 - Files modified: app-shell.tsx, landing-view.tsx, globals.css
 - All fixes verified via browser automation and AI visual audit
 - No duplicate footer, better contrast, proper touch targets, consistent alignment
+
+---
+Task ID: booking-wbp-freeflow
+Agent: Main
+Task: Perbaiki route pendaftaran booking kunjungan — hapus kewajiban pilih nama WBP dari daftar, hapus pendataan WBP publik, terbitkan barcode + Nomor Booking langsung setelah isi formulir, verifikasi wajib oleh petugas pendaftaran saat datang
+
+Work Log:
+- prisma/schema.prisma: Kunjungan.wbpId menjadi opsional (String?), relasi wbp WBP?, kolom baru namaWbp & nomorRegisterWbp (teks bebas dari pemohon); db push sukses tanpa data loss
+- src/lib/security/input-schemas.ts: kunjunganCreateBody — wbpId dihapus, namaWbp wajib (min 3), nomorRegisterWbp opsional
+- src/app/api/kunjungan/route.ts (POST publik): hapus lookup/validasi WBP DB, simpan namaWbp/nomorRegisterWbp, response menyertakan kodeBooking + qrCodeUrl + pesan instruksi verifikasi petugas
+- src/app/api/public/visit-bookings/route.ts: sama — tanpa lookup WBP, respons booking_code/inmate_name dari teks bebas + qr_code_url
+- src/app/api/public/wbp/route.ts: DIHAPUS (pendataan/pencarian WBP publik tidak ada lagi; barang-titipan-view dialihkan ke /api/wbp internal yang terautentikasi)
+- src/app/api/public/visit-bookings/track/route.ts: response menambahkan namaWbp & nomorRegisterWbp
+- src/app/api/kunjungan/internal/route.ts: booking oleh petugas juga memakai namaWbp teks bebas
+- src/app/api/kunjungan/scan/route.ts: BARU — GET ?kode= untuk petugas pendaftaran memindai barcode/ketik Nomor Booking (auth PERM_KUNJUNGAN_READ), mengembalikan data + berkas untuk diverifikasi
+- src/app/api/kunjungan/[id]/route.ts: PUT default branch mendukung update wbpId/namaWbp/nomorRegisterWbp (petugas pelayanan dapat menghubungkan kunjungan dengan WBP saat verifikasi)
+- kunjungan-view.tsx: form publik & BookingDialog internal tidak lagi mencari/memilih WBP dari daftar (input teks Nama WBP + Nomor Register opsional); layar sukses menampilkan Nomor Booking + barcode + instruksi tunjuk ke petugas pendaftaran; fallback tampilan namaWbp di kartu/tabel/detail/lacak/WA; fitur Scan Tiket baru di header internal (scan/ketik kode -> buka detail tiket untuk verifikasi); alur Setujui -> Check-in tetap ditegakkan API
+- Verifikasi live: POST /api/kunjungan 201 (namaWpb bebas), /api/public/wbp 404, scan 200, check-in sebelum setujui 400 (ditolak), setujui->check-in sukses, track mengembalikan namaWbp, validasi namaWbp wajib OK; tsc clean; npm run build sukses
+
+Stage Summary:
+- Pemohon tidak perlu memilih WBP terdaftar; cukup tulis nama WBP
+- Barcode + Nomor Booking terbit seketika setelah submit
+- Petugas pendaftaran scan -> WAJIB verifikasi (setujui/tolak) sebelum check-in
+- Pendataan WBP publik (/api/public/wbp) dihapus
+
+---
+Task ID: kunjungan-ux-fixes-2
+Agent: Main
+Task: Fix data tidak muncul di menu petugas pelayanan kunjungan, 2 sesi kunjungan, NIK max 16 digit, e-tiket unduhan ber-label Lapas Kelas IIA Bontang (JPG/PNG)
+
+Work Log:
+- ROOT CAUSE fix: InternalKunjunganView memanggil /api/kunjungan TANPA Authorization header -> selalu 401 -> daftar kosong. Menambahkan Bearer token (useAppStore currentUser.token) pada fetchKunjungan, handleScanTiket, dan TiketDetail.handleAction (setujui/tolak/checkin/selesai). Verifikasi live: tanpa token 401, dengan token 10 tiket masuk
+- Tab Kunjungan Aktif kini menampilkan tiket hari ini + mendatang (bukan hanya hari ini) supaya booking untuk tanggal depan terlihat petugas; kartu menampilkan tanggal
+- Sesi kunjungan menjadi 2: Sesi Pagi 09.00-12.00 & Sesi Siang 13.00-15.00 (SESI_LIST + label kuota dinamis); SESI_MAP /api/public/visit-bookings ikut disesuaikan
+- Input NIK dibatasi 16 digit (maxLength + filter angka) pada form publik dan BookingDialog internal
+- Fitur baru TiketUnduhCard: form e-tiket digambar via canvas berisi kop LAPAS KELAS IIA BONTANG, nomor booking, nama pengunjung, hubungan, WBP yang dikunjungi, NOMOR REGISTER WBP, tanggal, sesi, status, barcode QR, catatan verifikasi; tombol Unduh PNG & Unduh JPG (toDataURL); fallback teks bila QR gagal dimuat; dipasang di layar sukses booking dan Lacak Tiket
+- Route proxy baru GET /api/public/qr/[kode]: meneruskan QR dari api.qrserver.com sebagai same-origin PNG agar canvas tidak tainted CORS sehingga unduhan gambar berfungsi
+- Validasi: tsc clean, eslint 0 error, booking sesi baru 201, proxy QR mengembalikan image/png, npm run build sukses (exit 0)
+
+---
+Task ID: kunjungan-verify-camera
+Agent: Main
+Task: Perbaiki verifikasi data pendaftar di menu petugas, dialog tidak bisa scroll, tambah scan barcode via kamera langsung
+
+Work Log:
+- Diagnosis verifikasi gagal: dialog TiketDetail melebihi tinggi viewport tanpa scroll sehingga tombol Setujui/Tolak/Check-in terpotong dan tidak terjangkau; permission API sudah benar (SECURITY_OFFICER & ADMIN_LAPAS punya kunjungan:update di ROLE_PERMISSIONS)
+- Scroll fix: DialogContent TiketDetail dan BookingDialog diberi max-h-[92vh] overflow-y-auto agar seluruh konten + tombol aksi terjangkau di layar kecil
+- Fitur kamera scan: komponen KameraScan baru pada dialog Scan Tiket (toggle Ketik Manual <-> Scan via Kamera); getUserMedia facingMode environment; decoder native BarcodeDetector (Chrome/Android) dengan fallback dynamic-import jsqr@^1.4.0 (mendukung semua browser termasuk iOS Safari); loop pemindaian throttled ~130ms; overlay kotak bidik; stream dihentikan otomatis saat kode terbaca/dialog ditutup; hasil scan otomatis memanggil handleLookup(kode)
+- Refactor InternalKunjunganView: fetchKunjungan dipindah ke atas komponen, handleLookup(kode) reusable useCallback dipakai form manual & kamera; ikon Camera & Keyboard ditambahkan
+- Verifikasi live akun security (SECURITY_OFFICER): list 12 tiket masuk, scan SJY-260823-497 OK berkas=2, PUT setujui -> Disetujui; tsc clean, eslint clean, npm run build exit 0
+
+---
+Task ID: barang-titipan-parity-kunjungan
+Agent: Main
+Task: Sesuaikan proses Barang Titipan dengan Kunjungan Online (WBP teks bebas, tanda terima ber-barcode unduhan JPG/PNG, scan kamera petugas)
+
+Work Log:
+- prisma/schema.prisma: BarangTitipan.wbpId opsional (String?, relasi WBP?), kolom baru namaWbp & nomorRegisterWbp; db push + generate ulang (catatan: generate sempat EPERM karena DLL terkunci dev server -> Prisma client stale menyebabkan 500 Unknown argument namaWbp; solusi kill node + prisma generate bersih)
+- POST /api/barang-titipan: wbp_id tidak wajib, terima nama_wbp (wajib) + nomor_register_wbp (opsional); hapus lookup/validasi WBP DB; response menambah qr_code_url + pesan instruksi verifikasi petugas
+- GET /api/barang-titipan & GET [id]: mapping aman WBP null + field nama_wbp/nomor_register_wbp (fallback dari relasi untuk data lama)
+- Track publik track/[kode]: fallback namaWbp/nomorRegisterWbp
+- Route baru GET /api/barang-titipan/scan?kode= (PERM_BARANG_TITIPAN_READ): cari titipan by kodeTitipan utk petugas scan barcode/ketik kode -> buka detail utk verifikasi item
+- input-schemas.ts: barangTitipanCreateBody ganti wbpId -> namaWbp wajib + nomorRegisterWbp opsional
+- shared.tsx: KameraScan diekstrak jadi komponen shared (dipakai kunjungan-view & barang-titipan-view); perbaiki kurung tutup SectionCard yang tertimpa saat insert
+- barang-titipan-view.tsx: form tanpa pilih WBP dari daftar (input teks Nama WBP Tujuan + Nomor Register opsional dalam kotak penjelasan); NIK filter digit max 16; sukses submit menampilkan TandaTerimaUnduhCard (canvas: kop LAPAS KELAS IIA BONTANG, KODE TITIPAN besar, pengirim, hubungan, WBP tujuan, register, kategori, tanggal+jumlah item, status, QR via /api/public/qr proxy) dgn Unduh PNG/JPG; tab Lacak juga menyediakan kartu unduhan; tombol Scan Kode Titipan di tab Daftar petugas (kamera/manual) -> detail dialog utk verifikasi; fallback nama_wbp pada tabel/detail/verify dialog
+- Verifikasi live: POST 201 TRP-2608-002 (tanpa wbp_id), scan 200 items=2 wbp-null aman, track 200, validasi nama_wbp kosong 400; tsc clean; eslint clean; npm run build exit 0
+
+---
+Task ID: barang-titipan-verify-print
+Agent: Main
+Task: Perbaiki verifikasi barang titipan oleh petugas + fitur cetak biodata pemilik barang setelah verifikasi
+
+Work Log:
+- Diagnosis: (1) crash render di dialog verifikasi utk record baru tanpa relasi WBP -> verifyData.wbp.nama melempar TypeError (sudah difix dgn fallback nama_wbp || wbp?.nama); (2) rantai openVerify lama rawan race condition (setVerifyKode + useEffect matching) diganti async langsung: fetch detail -> validasi status Menunggu -> isi verifyItems -> buka dialog; hapus state verifyKode; (3) bug route reject: destructure alasanPenolakan padahal frontend kirim alasan_penolakan -> selalu 400, sekarang terima kedua format
+- Fitur cetak: helper modul buildTitipanPrintParts/buildTitipanPrintHtml/printHtmlDocument (iframe offscreen + window.print); handler cetakDataBarang(id) mengambil detail dgn Bearer token lalu mencetak; tombol Cetak pada baris tabel (status Diverifikasi & Diterima) dan footer dialog Detail
+- Dokumen cetak berisi: kop LAPAS KELAS IIA BONTANG, kode+status, A. Biodata Pemilik/Pengirim (nama/NIK/HP/hubungan), B. Data WBP Tujuan (nama/register/blok-kamar/kategori/tanggal), C. tabel Daftar Barang (no/nama/jumlah/keterangan/status+alasan), catatan petugas, blok tanda tangan Pengirim & Petugas Pelayanan (nama+NIP verifikator), footer waktu cetak
+- Verifikasi live akun security: buat TRP-2608-004 Menunggu, scan->verify array payload = Diverifikasi OK, reject alasan_penolakan snake_case = Ditolak OK, detail menyediakan biodata lengkap; tsc clean; eslint clean; npm run build exit 0

@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/security/security-pipeline'
+import { PERM_PEMBINAAN_READ, PERM_PEMBINAAN_UPDATE } from '@/lib/security/permissions'
 
 // GET /api/pembinaan/[id] — Get single program with peserta and kehadiran
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(request, [PERM_PEMBINAAN_READ])
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { id } = await params
 
@@ -52,6 +57,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(request, [PERM_PEMBINAAN_UPDATE])
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { id } = await params
     const body = await request.json()
@@ -98,9 +106,12 @@ export async function PUT(
 
 // DELETE /api/pembinaan/[id] — Delete program (cascade deletes peserta & kehadiran)
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireAuth(request, [PERM_PEMBINAAN_UPDATE])
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { id } = await params
 

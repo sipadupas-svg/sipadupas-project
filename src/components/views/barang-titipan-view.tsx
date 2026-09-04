@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   Package,
@@ -23,8 +23,13 @@ import {
   AlertTriangle,
   ArrowRight,
   Inbox,
+  QrCode,
+  Camera,
+  Keyboard,
+  Download,
+  Printer,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +64,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageHeader, StatCard, SectionCard } from "./shared";
+import { PageHeader, StatCard, SectionCard, KameraScan } from "./shared";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
@@ -79,17 +84,19 @@ interface TitipanListItem {
   nama_pengirim: string;
   no_hp?: string | null;
   hubungan: string;
+  nama_wbp?: string | null;
+  nomor_register_wbp?: string | null;
   kategori: string;
   tanggal_penitipan: string;
   status: string;
-  wbp: {
+  wbp?: {
     id: string;
     nomor_register: string;
     nama: string;
     status: string;
     blok: string | null;
     kamar: string | null;
-  };
+  } | null;
   verified_by: { id: string; nama: string; nip: string } | null;
   jumlah_item: number;
   verified_at?: string | null;
@@ -105,6 +112,8 @@ interface TitipanDetailItem {
   nik_pengirim?: string | null;
   no_hp?: string | null;
   hubungan: string;
+  nama_wbp?: string | null;
+  nomor_register_wbp?: string | null;
   kategori: string;
   tanggal_penitipan: string;
   jam_penitipan?: string | null;
@@ -117,14 +126,14 @@ interface TitipanDetailItem {
   rejected_at?: string | null;
   created_at: string;
   updated_at: string;
-  wbp: {
+  wbp?: {
     id: string;
     nomor_register: string;
     nama: string;
     status: string;
     blok: string | null;
     kamar: string | null;
-  };
+  } | null;
   verified_by: { id: string; nama: string; nip: string } | null;
   items: TitipanItemDetail[];
 }
@@ -301,7 +310,6 @@ export function BarangTitipanView() {
     { item_id: string; status: string; alasan_penolakan: string }[]
   >([]);
   const [verifyCatatan, setVerifyCatatan] = useState("");
-  const [verifyKode, setVerifyKode] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
 
   // Deliver dialog
@@ -324,11 +332,9 @@ export function BarangTitipanView() {
   const [formNoHp, setFormNoHp] = useState("");
   const [formHubungan, setFormHubungan] = useState("");
   const [formCatatan, setFormCatatan] = useState("");
-  const [formWbpId, setFormWbpId] = useState("");
-  const [formWbpSearch, setFormWbpSearch] = useState("");
-  const [formWbpResults, setFormWbpResults] = useState<WBPSearchItem[]>([]);
-  const [formWbpSelected, setFormWbpSelected] = useState<WBPSearchItem | null>(null);
-  const [formWbpLoading, setFormWbpLoading] = useState(false);
+  // Sama seperti kunjungan online: tidak perlu memilih WBP dari daftar
+  const [formNamaWbp, setFormNamaWbp] = useState("");
+  const [formNomorRegisterWbp, setFormNomorRegisterWbp] = useState("");
   const [formTanggal, setFormTanggal] = useState(getTodayStr());
   const [formJam, setFormJam] = useState(getNowTimeStr());
   const [formKategori, setFormKategori] = useState("");
@@ -336,6 +342,21 @@ export function BarangTitipanView() {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formSuccessOpen, setFormSuccessOpen] = useState(false);
   const [formSuccessKode, setFormSuccessKode] = useState("");
+  const [formSuccessData, setFormSuccessData] = useState<{
+    namaPengirim: string;
+    hubungan: string;
+    namaWbp: string;
+    nomorRegisterWbp: string;
+    kategori: string;
+    tanggalPenitipan: string;
+    jumlahItem: number;
+  } | null>(null);
+
+  // ─── Scan Kode Titipan State (petugas) ──────────────────────────────
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanCode, setScanCode] = useState("");
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanCameraMode, setScanCameraMode] = useState(false);
 
   // ─── Lacak Titipan State ─────────────────────────────────────────
   const [trackKode, setTrackKode] = useState("");
@@ -425,29 +446,37 @@ export function BarangTitipanView() {
   };
 
   // ─── Verify Action ─────────────────────────────────────────
-  const openVerify = (item: TitipanListItem) => {
-    fetchDetail(item.id).then(() => {
-      // Will use detailData when loaded
-    });
-    // We'll set verify data after detail loads
-    setVerifyKode(item.kode_titipan);
-  };
-
-  useEffect(() => {
-    if (detailData && verifyKode && detailData.kode_titipan === verifyKode) {
-      setVerifyData(detailData);
+  // Muat detail secara langsung lalu buka dialog verifikasi (tanpa efek berantai)
+  const openVerify = async (item: TitipanListItem) => {
+    if (!token) return;
+    try {
+      setDetailLoading(true);
+      const res = await fetch(`/api/barang-titipan/${item.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      const data: TitipanDetailItem = json.data;
+      if (data.status !== "Menunggu") {
+        toast.error(`Titipan dengan status "${data.status}" tidak dapat diverifikasi`);
+        return;
+      }
+      setVerifyData(data);
       setVerifyItems(
-        detailData.items.map((item) => ({
-          item_id: item.id,
+        data.items.map((i) => ({
+          item_id: i.id,
           status: "Diterima",
           alasan_penolakan: "",
         }))
       );
       setVerifyCatatan("");
       setVerifyOpen(true);
-      setVerifyKode(""); // reset
+    } catch {
+      toast.error("Gagal memuat detail barang titipan");
+    } finally {
+      setDetailLoading(false);
     }
-  }, [detailData, verifyKode]);
+  };
 
   const handleVerify = async () => {
     if (!token || !verifyData) return;
@@ -558,34 +587,54 @@ export function BarangTitipanView() {
     }
   };
 
-  // ─── WBP Search for Form ─────────────────────────────────────────
-  useEffect(() => {
-    if (!formWbpSearch || formWbpSearch.length < 2) {
-      setFormWbpResults([]);
-      return;
+  // ─── Cetak Lembar Data Barang & Biodata Pemilik (setelah verifikasi) ─────
+  const cetakDataBarang = async (id: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/barang-titipan/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      const data: TitipanDetailItem = json.data;
+      printHtmlDocument(buildTitipanPrintHtml(data, buildTitipanPrintParts(data)));
+    } catch {
+      toast.error("Gagal memuat data untuk dicetak");
     }
-    const timer = setTimeout(async () => {
-      try {
-        setFormWbpLoading(true);
-        const res = await fetch(`/api/wbp?search=${encodeURIComponent(formWbpSearch)}&limit=10`);
-        if (!res.ok) return;
-        const json = await res.json();
-        setFormWbpResults(json.data || []);
-      } catch {
-        // silent
-      } finally {
-        setFormWbpLoading(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [formWbpSearch]);
-
-  const selectWbp = (wbp: WBPSearchItem) => {
-    setFormWbpId(wbp.id);
-    setFormWbpSelected(wbp);
-    setFormWbpSearch("");
-    setFormWbpResults([]);
   };
+
+  // ─── Scan Kode Titipan (petugas) ─────────────────────────────────────
+  const handleScanLookup = useCallback(async (kode: string) => {
+    const value = kode.trim();
+    if (!value) return;
+    setScanLoading(true);
+    try {
+      const res = await fetch(`/api/barang-titipan/scan?kode=${encodeURIComponent(value)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.error?.message || "Kode titipan tidak ditemukan");
+      }
+      const json = await res.json();
+      toast.success(`Titipan ${json.data.kode_titipan} ditemukan — verifikasi data sebelum menerima barang.`);
+      setScanOpen(false);
+      setScanCameraMode(false);
+      setScanCode("");
+      setDetailData(json.data);
+      setDetailOpen(true);
+      if (isAuthenticated) fetchList();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal memindai kode titipan");
+    } finally {
+      setScanLoading(false);
+    }
+  }, [token, isAuthenticated, fetchList]);
+
+  async function handleScanSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
+    await handleScanLookup(scanCode);
+  }
 
   // ─── Form Items Management ─────────────────────────────────────────
   const addFormItem = () => setFormItems([...formItems, emptyFormItem()]);
@@ -593,13 +642,13 @@ export function BarangTitipanView() {
     setFormItems(formItems.filter((_, i) => i !== idx));
   const updateFormItem = (idx: number, field: keyof FormItem, value: string | number) => {
     const next = [...formItems];
-    (next[idx] as Record<string, string | number>)[field] = value;
+    (next[idx] as unknown as Record<string, string | number>)[field] = value;
     setFormItems(next);
   };
 
   // ─── Form Submit ─────────────────────────────────────────
   const handleFormSubmit = async () => {
-    if (!formNama.trim() || !formHubungan || !formWbpId || !formTanggal || !formKategori) {
+    if (!formNama.trim() || !formHubungan || !formNamaWbp.trim() || !formTanggal || !formKategori) {
       toast.error("Mohon lengkapi semua field yang wajib diisi");
       return;
     }
@@ -618,7 +667,8 @@ export function BarangTitipanView() {
           nik_pengirim: formNik.trim() || null,
           no_hp: formNoHp.trim() || null,
           hubungan: formHubungan,
-          wbp_id: formWbpId,
+          nama_wbp: formNamaWbp.trim(),
+          nomor_register_wbp: formNomorRegisterWbp.trim() || null,
           kategori: formKategori,
           tanggal_penitipan: formTanggal,
           jam_penitipan: formJam || null,
@@ -637,6 +687,15 @@ export function BarangTitipanView() {
       }
       const json = await res.json();
       setFormSuccessKode(json.data?.kode_titipan || "");
+      setFormSuccessData({
+        namaPengirim: formNama.trim(),
+        hubungan: formHubungan,
+        namaWbp: formNamaWbp.trim(),
+        nomorRegisterWbp: formNomorRegisterWbp.trim(),
+        kategori: formKategori,
+        tanggalPenitipan: formTanggal,
+        jumlahItem: validItems.length,
+      });
       setFormSuccessOpen(true);
       toast.success("Penitipan barang berhasil didaftarkan");
       // Reset form
@@ -645,8 +704,8 @@ export function BarangTitipanView() {
       setFormNoHp("");
       setFormHubungan("");
       setFormCatatan("");
-      setFormWbpId("");
-      setFormWbpSelected(null);
+      setFormNamaWbp("");
+      setFormNomorRegisterWbp("");
       setFormTanggal(getTodayStr());
       setFormJam(getNowTimeStr());
       setFormKategori("");
@@ -738,7 +797,66 @@ export function BarangTitipanView() {
             </div>
 
             {/* Filter Bar */}
-            <SectionCard title="Filter" className="">
+            <SectionCard
+              title="Filter"
+              className=""
+              action={
+                <Dialog open={scanOpen} onOpenChange={(v) => { setScanOpen(v); if (!v) setScanCameraMode(false); }}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-8 text-xs">
+                      <QrCode className="size-3.5 mr-1" />
+                      Scan Kode Titipan
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-sm">
+                        <QrCode className="size-5 text-primary" /> Scan / Verifikasi Titipan
+                      </DialogTitle>
+                      <DialogDescription className="text-xs">
+                        Pindai barcode pengunjung dengan kamera, atau ketik Kode Titipan. Verifikasi item wajib dilakukan sebelum barang diterima.
+                      </DialogDescription>
+                    </DialogHeader>
+                    {scanCameraMode ? (
+                      <KameraScan onDetected={handleScanLookup} />
+                    ) : (
+                      <form onSubmit={handleScanSubmit} className="space-y-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="bt-scan-kode" className="text-xs">Kode Titipan</Label>
+                          <Input
+                            id="bt-scan-kode"
+                            autoFocus
+                            value={scanCode}
+                            onChange={(e) => setScanCode(e.target.value)}
+                            placeholder="Contoh: TRP-2608-001"
+                            autoComplete="off"
+                            className="text-xs"
+                          />
+                        </div>
+                        <DialogFooter>
+                          <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => setScanOpen(false)}>Batal</Button>
+                          <Button type="submit" size="sm" className="text-xs" disabled={scanLoading || !scanCode.trim()}>
+                            {scanLoading && <Loader2 className="size-3.5 mr-1 animate-spin" />}
+                            Cari Titipan
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    )}
+                    <div className="flex justify-center border-t pt-3">
+                      {scanCameraMode ? (
+                        <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setScanCameraMode(false)}>
+                          <Keyboard className="size-3.5 mr-1" /> Ketik Manual
+                        </Button>
+                      ) : (
+                        <Button type="button" variant="ghost" size="sm" className="text-xs" onClick={() => setScanCameraMode(true)} disabled={scanLoading}>
+                          <Camera className="size-3.5 mr-1" /> Scan via Kamera
+                        </Button>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              }
+            >
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" strokeWidth={1.75} />
@@ -835,11 +953,13 @@ export function BarangTitipanView() {
                               <div className="text-muted-foreground">{item.hubungan}</div>
                             </TableCell>
                             <TableCell className="text-xs">
-                              <div className="font-medium">{item.wbp.nama}</div>
+                              <div className="font-medium">{item.nama_wbp || item.wbp?.nama || "-"}</div>
                               <div className="text-muted-foreground">
-                                {item.wbp.blok && item.wbp.kamar
-                                  ? `${item.wbp.blok} / ${item.wbp.kamar}`
-                                  : "-"}
+                                {item.nomor_register_wbp || item.wbp?.nomor_register
+                                  ? `Reg: ${item.nomor_register_wbp || item.wbp?.nomor_register}`
+                                  : item.wbp?.blok && item.wbp?.kamar
+                                    ? `${item.wbp.blok} / ${item.wbp.kamar}`
+                                    : "-"}
                               </div>
                             </TableCell>
                             <TableCell className="text-xs">{item.kategori}</TableCell>
@@ -900,7 +1020,29 @@ export function BarangTitipanView() {
                                       <Ban className="size-3.5 mr-1" strokeWidth={1.75} />
                                       Tolak
                                     </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2 text-xs"
+                                      title="Cetak lembar data barang & biodata pengirim"
+                                      onClick={() => cetakDataBarang(item.id)}
+                                    >
+                                      <Printer className="size-3.5 mr-1" strokeWidth={1.75} />
+                                      Cetak
+                                    </Button>
                                   </>
+                                )}
+                                {item.status === "Diterima" && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-xs"
+                                    title="Cetak lembar data barang & biodata pengirim"
+                                    onClick={() => cetakDataBarang(item.id)}
+                                  >
+                                    <Printer className="size-3.5 mr-1" strokeWidth={1.75} />
+                                    Cetak
+                                  </Button>
                                 )}
                               </div>
                             </TableCell>
@@ -965,11 +1107,12 @@ export function BarangTitipanView() {
                     <div className="space-y-1.5">
                       <Label className="text-xs">NIK</Label>
                       <Input
-                        placeholder="Nomor Induk Kependudukan"
+                        placeholder="16 digit NIK"
                         value={formNik}
-                        onChange={(e) => setFormNik(e.target.value)}
+                        onChange={(e) => setFormNik(e.target.value.replace(/\D/g, "").slice(0, 16))}
                         className="text-xs"
                         maxLength={16}
+                        inputMode="numeric"
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -1013,73 +1156,36 @@ export function BarangTitipanView() {
               <div className="space-y-4">
                 <h4 className="text-sm font-semibold text-foreground">Data WBP</h4>
                 <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      Cari WBP <span className="text-red-500">*</span>
-                    </Label>
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" strokeWidth={1.75} />
-                      <Input
-                        placeholder="Ketik nama atau nomor register WBP"
-                        value={formWbpSearch}
-                        onChange={(e) => setFormWbpSearch(e.target.value)}
-                        className="pl-8 text-xs"
-                        disabled={!!formWbpSelected}
-                      />
-                      {formWbpLoading && (
-                        <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 animate-spin text-muted-foreground" />
-                      )}
+                  <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                    <p className="text-xs text-muted-foreground">
+                      Anda <span className="font-medium text-foreground">tidak perlu memilih nama WBP dari daftar</span>. Cukup tuliskan nama WBP tujuan — data akan diverifikasi oleh petugas saat barang diantar.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">
+                          Nama WBP Tujuan <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          placeholder="Contoh: Ahmad Suryadi"
+                          value={formNamaWbp}
+                          onChange={(e) => setFormNamaWbp(e.target.value)}
+                          className="text-xs"
+                          autoComplete="off"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">
+                          Nomor Register WBP <span className="text-muted-foreground">(jika tahu)</span>
+                        </Label>
+                        <Input
+                          placeholder="Contoh: WBP-2024-001"
+                          value={formNomorRegisterWbp}
+                          onChange={(e) => setFormNomorRegisterWbp(e.target.value)}
+                          className="text-xs"
+                          autoComplete="off"
+                        />
+                      </div>
                     </div>
-                    {/* WBP Search Results Dropdown */}
-                    {formWbpResults.length > 0 && !formWbpSelected && (
-                      <div className="border rounded-lg bg-background shadow-md max-h-48 overflow-y-auto custom-scrollbar">
-                        {formWbpResults.map((wbp) => (
-                          <button
-                            key={wbp.id}
-                            type="button"
-                            className="w-full text-left px-3 py-2 hover:bg-muted/50 text-xs border-b border-border/50 last:border-b-0 transition-colors"
-                            onClick={() => selectWbp(wbp)}
-                          >
-                            <div className="font-medium">{wbp.nama}</div>
-                            <div className="text-muted-foreground">
-                              Reg: {wbp.nomorRegister}
-                              {wbp.currentRoom ? ` · ${wbp.currentRoom.blockName}/${wbp.currentRoom.roomNumber}` : ""}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {/* Selected WBP Card */}
-                    {formWbpSelected && (
-                      <div className="flex items-start justify-between p-3 rounded-lg border border-primary/30 bg-primary/5">
-                        <div className="flex items-start gap-2.5">
-                          <div className="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                            <User className="size-4" strokeWidth={1.75} />
-                          </div>
-                          <div>
-                            <div className="text-xs font-semibold">{formWbpSelected.nama}</div>
-                            <div className="text-xs text-muted-foreground">Reg: {formWbpSelected.nomorRegister}</div>
-                            {formWbpSelected.currentRoom && (
-                              <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                <MapPin className="size-3" strokeWidth={1.75} />
-                                {formWbpSelected.currentRoom.blockName} / {formWbpSelected.currentRoom.roomNumber}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500"
-                          onClick={() => {
-                            setFormWbpId("");
-                            setFormWbpSelected(null);
-                          }}
-                        >
-                          <XCircle className="size-4" strokeWidth={1.75} />
-                        </Button>
-                      </div>
-                    )}
                   </div>
 
                   <Separator />
@@ -1227,7 +1333,7 @@ export function BarangTitipanView() {
 
           {/* Success Dialog */}
           <Dialog open={formSuccessOpen} onOpenChange={setFormSuccessOpen}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md max-h-[92vh] overflow-y-auto">
               <DialogHeader>
                 <div className="mx-auto size-14 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center mb-2">
                   <CheckCircle2 className="size-7" strokeWidth={1.75} />
@@ -1256,6 +1362,19 @@ export function BarangTitipanView() {
                   </Button>
                 </div>
               </div>
+              {formSuccessData && (
+                <TandaTerimaUnduhCard
+                  kodeTitipan={formSuccessKode}
+                  namaPengirim={formSuccessData.namaPengirim}
+                  hubungan={formSuccessData.hubungan}
+                  namaWbp={formSuccessData.namaWbp}
+                  nomorRegisterWbp={formSuccessData.nomorRegisterWbp}
+                  kategori={formSuccessData.kategori}
+                  tanggalPenitipan={formSuccessData.tanggalPenitipan}
+                  jumlahItem={formSuccessData.jumlahItem}
+                  status="Menunggu"
+                />
+              )}
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-800 flex items-start gap-2">
                 <AlertTriangle className="size-4 shrink-0 mt-0.5" strokeWidth={1.75} />
                 <span>
@@ -1460,6 +1579,22 @@ export function BarangTitipanView() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Unduh Tanda Terima */}
+              <div>
+                <p className="text-xs font-semibold text-center mb-2 text-muted-foreground">Unduh Tanda Terima (ber-barcode)</p>
+                <TandaTerimaUnduhCard
+                  kodeTitipan={trackData.kode_titipan}
+                  namaPengirim={trackData.nama_pengirim}
+                  hubungan={trackData.hubungan}
+                  namaWbp={trackData.nama_wbp || "-"}
+                  nomorRegisterWbp={trackData.nomor_register_wbp || ""}
+                  kategori={trackData.kategori}
+                  tanggalPenitipan={trackData.tanggal_penitipan}
+                  jumlahItem={trackData.items.length}
+                  status={trackData.status}
+                />
+              </div>
             </div>
           )}
         </TabsContent>
@@ -1506,9 +1641,11 @@ export function BarangTitipanView() {
                   {/* WBP */}
                   <div className="p-3 rounded-lg border bg-muted/30 space-y-1.5">
                     <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">WBP</div>
-                    <div className="text-xs font-medium">{detailData.wbp.nama}</div>
-                    <div className="text-xs text-muted-foreground">Reg: {detailData.wbp.nomor_register}</div>
-                    {detailData.wbp.blok && (
+                    <div className="text-xs font-medium">{detailData.nama_wbp || detailData.wbp?.nama || "-"}</div>
+                    {(detailData.nomor_register_wbp || detailData.wbp?.nomor_register) && (
+                      <div className="text-xs text-muted-foreground">Reg: {detailData.nomor_register_wbp || detailData.wbp?.nomor_register}</div>
+                    )}
+                    {detailData.wbp?.blok && (
                       <div className="text-xs text-muted-foreground">
                         Blok: {detailData.wbp.blok} / {detailData.wbp.kamar}
                       </div>
@@ -1608,6 +1745,14 @@ export function BarangTitipanView() {
               </div>
             </ScrollArea>
           ) : null}
+          {detailData && ["Diverifikasi", "Diterima"].includes(detailData.status) && (
+            <div className="flex justify-end border-t pt-3">
+              <Button size="sm" className="text-xs" onClick={() => cetakDataBarang(detailData.id)}>
+                <Printer className="size-3.5 mr-1" strokeWidth={1.75} />
+                Cetak Data Barang
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1628,7 +1773,7 @@ export function BarangTitipanView() {
                   <span className="text-muted-foreground">·</span>
                   <span>{verifyData.nama_pengirim}</span>
                   <span className="text-muted-foreground">→</span>
-                  <span className="font-medium">{verifyData.wbp.nama}</span>
+                  <span className="font-medium">{verifyData.nama_wbp || verifyData.wbp?.nama || "-"}</span>
                 </div>
 
                 {/* Items with toggles */}
@@ -1902,3 +2047,319 @@ function TrackProgressSteps({ status }: { status: string }) {
     </div>
   );
 }
+
+// ─── Tanda Terima Unduhan (barcode + data titipan dalam satu form gambar) ───
+interface TandaTerimaUnduhProps {
+  kodeTitipan: string;
+  namaPengirim: string;
+  hubungan: string;
+  namaWbp: string;
+  nomorRegisterWbp?: string;
+  kategori: string;
+  tanggalPenitipan: string;
+  jumlahItem: number;
+  status?: string;
+}
+
+function TandaTerimaUnduhCard({ kodeTitipan, namaPengirim, hubungan, namaWbp, nomorRegisterWbp, kategori, tanggalPenitipan, jumlahItem, status }: TandaTerimaUnduhProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [qrFailed, setQrFailed] = useState(false);
+
+  const W = 860;
+  const H = 1160;
+
+  function drawReceipt(ctx: CanvasRenderingContext2D, qrImg: HTMLImageElement | null) {
+    // Latar putih (wajib untuk ekspor JPG yang tidak mendukung transparansi)
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "left";
+
+    // Kop / label instansi
+    ctx.fillStyle = "#0F3D66";
+    ctx.fillRect(0, 0, W, 150);
+    ctx.strokeStyle = "#F59E0B";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(0, 150);
+    ctx.lineTo(W, 150);
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "bold 40px Arial, Helvetica, sans-serif";
+    ctx.fillText("LAPAS KELAS IIA BONTANG", W / 2, 66);
+    ctx.font = "600 21px Arial, Helvetica, sans-serif";
+    ctx.fillText("TANDA TERIMA BARANG TITIPAN", W / 2, 106);
+    if (status) {
+      ctx.font = "italic 17px Arial, Helvetica, sans-serif";
+      ctx.fillStyle = "#BFDBFE";
+      ctx.fillText(`Status: ${status}`, W / 2, 134);
+    }
+    ctx.textAlign = "left";
+
+    // Data titipan
+    const rows: Array<[string, string]> = [
+      ["KODE TITIPAN", kodeTitipan],
+      ["NAMA PENGIRIM", namaPengirim],
+      ["HUBUNGAN DENGAN WBP", hubungan],
+      ["WBP TUJUAN", namaWbp],
+      ["NOMOR REGISTER WBP", nomorRegisterWbp && nomorRegisterWbp.trim() ? nomorRegisterWbp : "-"],
+      ["KATEGORI BARANG", kategori],
+      ["TANGGAL PENITIPAN", `${tanggalPenitipan} · ${jumlahItem} item barang`],
+    ];
+
+    let y = 208;
+    rows.forEach(([label, value], idx) => {
+      ctx.fillStyle = "#64748B";
+      ctx.font = "15px Arial, Helvetica, sans-serif";
+      ctx.fillText(label, 70, y);
+      if (idx === 0) {
+        ctx.fillStyle = "#0F3D66";
+        ctx.font = "bold 36px 'Courier New', monospace";
+      } else {
+        ctx.fillStyle = "#0F172A";
+        ctx.font = "bold 24px Arial, Helvetica, sans-serif";
+      }
+      ctx.fillText(String(value || "-").slice(0, 42), 70, y + 36);
+      ctx.strokeStyle = "#E2E8F0";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(70, y + 52);
+      ctx.lineTo(W - 70, y + 52);
+      ctx.stroke();
+      y += idx === 0 ? 82 : 66;
+    });
+
+
+    // Barcode QR
+    const qrSize = 330;
+    const qrX = (W - qrSize) / 2;
+    const qrY = y + 18;
+    ctx.strokeStyle = "#CBD5E1";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(qrX - 14, qrY - 14, qrSize + 28, qrSize + 28);
+    if (qrImg) {
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+    } else {
+      ctx.fillStyle = "#F1F5F9";
+      ctx.fillRect(qrX, qrY, qrSize, qrSize);
+      ctx.fillStyle = "#64748B";
+      ctx.textAlign = "center";
+      ctx.font = "bold 22px Arial, Helvetica, sans-serif";
+      ctx.fillText("KODE TIDAK TERSEDIA", qrX + qrSize / 2, qrY + qrSize / 2 - 12);
+      ctx.font = "bold 26px 'Courier New', monospace";
+      ctx.fillText(kodeTitipan, qrX + qrSize / 2, qrY + qrSize / 2 + 24);
+      ctx.textAlign = "left";
+    }
+
+    // Catatan kaki
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#334155";
+    ctx.font = "17px Arial, Helvetica, sans-serif";
+    ctx.fillText("* Barcode ini dipindai petugas untuk verifikasi barang titipan", W / 2, qrY + qrSize + 52);
+    ctx.fillStyle = "#94A3B8";
+    ctx.font = "14px Arial, Helvetica, sans-serif";
+    ctx.fillText(
+      `Dicetak: ${new Date().toLocaleString("id-ID")} · Sistem Barang Titipan Lapas Kelas IIA Bontang`,
+      W / 2,
+      qrY + qrSize + 82,
+    );
+    ctx.textAlign = "left";
+  }
+
+
+  useEffect(() => {
+    let cancelled = false;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    drawReceipt(ctx, null);
+
+    // Muat QR via proxy same-origin agar canvas bisa diekspor (tidak tainted CORS)
+    const img = new Image();
+    img.onload = () => {
+      if (cancelled) return;
+      drawReceipt(ctx, img);
+    };
+    img.onerror = () => {
+      if (cancelled) return;
+      setQrFailed(true);
+      drawReceipt(ctx, null);
+    };
+    img.src = `/api/public/qr/${encodeURIComponent(kodeTitipan)}`;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [kodeTitipan]);
+
+  function download(mime: "image/png" | "image/jpeg") {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ext = mime === "image/jpeg" ? "jpg" : "png";
+    const dataUrl = mime === "image/jpeg" ? canvas.toDataURL("image/jpeg", 0.95) : canvas.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `tanda-terima-titipan-${kodeTitipan}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast.success(`Tanda terima berhasil diunduh sebagai ${ext.toUpperCase()}`);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-center">
+        <div className="rounded-xl border bg-white p-2 shadow-sm">
+          <canvas ref={canvasRef} className="max-h-[430px] w-auto max-w-full rounded-lg" />
+        </div>
+      </div>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => download("image/png")}>
+          <Download className="size-4 mr-2" />Unduh PNG
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => download("image/jpeg")}>
+          <Download className="size-4 mr-2" />Unduh JPG
+        </Button>
+      </div>
+      {qrFailed && (
+        <p className="text-xs text-muted-foreground text-center">
+          Barcode QR gagal dimuat — Kode Titipan tetap tercantum pada tanda terima dan dapat diverifikasi manual oleh petugas.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Helper cetak Lembar Data Barang Titipan & Biodata Pemilik ──────────────
+// Tersedia bagi petugas setelah memverifikasi titipan (status Diverifikasi / Diterima).
+interface TitipanPrintParts {
+  itemRows: string;
+  wbpNama: string;
+  wbpReg: string;
+  blokRow: string;
+  catatanBlock: string;
+  ttdVerified: string;
+}
+
+function escHtml(v?: string | null): string {
+  return String(v ?? "-").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function buildTitipanPrintParts(data: TitipanDetailItem): TitipanPrintParts {
+  const itemRows = data.items
+    .map(
+      (it, i) => `
+        <tr>
+          <td style="text-align:center">${i + 1}</td>
+          <td>${escHtml(it.nama_barang)}</td>
+          <td style="text-align:center">${it.jumlah} ${escHtml(it.satuan)}</td>
+          <td>${escHtml(it.keterangan)}</td>
+          <td style="text-align:center">${escHtml(it.status)}${
+            it.status === "Ditolak" && it.alasan_penolakan ? `<br/><small>${escHtml(it.alasan_penolakan)}</small>` : ""
+          }</td>
+        </tr>`
+    )
+    .join("");
+  return {
+    itemRows,
+    wbpNama: escHtml(data.nama_wbp || data.wbp?.nama),
+    wbpReg: escHtml(data.nomor_register_wbp || data.wbp?.nomor_register),
+    blokRow: data.wbp?.blok
+      ? `<tr><td class="lbl">Lokasi Blok / Kamar</td><td>: ${escHtml(data.wbp.blok)} / ${escHtml(data.wbp.kamar)}</td></tr>`
+      : "",
+    catatanBlock: data.catatan_petugas
+      ? `<div class="catatan"><b>Catatan Petugas:</b> ${escHtml(data.catatan_petugas)}</div>`
+      : "",
+    ttdVerified: data.verified_by
+      ? `${escHtml(data.verified_by.nama)}<br/><span style="font-size:10px">NIP. ${escHtml(data.verified_by.nip)}</span>`
+      : "____________________",
+  };
+}
+
+
+function buildTitipanPrintHtml(data: TitipanDetailItem, parts: TitipanPrintParts): string {
+  return `<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8" />
+<title>Lembar Data Barang Titipan ${escHtml(data.kode_titipan)}</title><style>
+* { box-sizing: border-box; }
+body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 32px; font-size: 12px; }
+.kop { border-bottom: 4px solid #0F3D66; padding-bottom: 10px; text-align: center; margin-bottom: 6px; }
+.kop h1 { margin: 0; font-size: 20px; letter-spacing: 1px; color: #0F3D66; }
+.kop p { margin: 4px 0 0; font-size: 11px; color: #444; }
+.judul { text-align: center; font-weight: bold; font-size: 14px; margin: 14px 0 2px; text-transform: uppercase; }
+.subjudul { text-align: center; font-size: 11px; color: #555; margin-bottom: 16px; }
+table.data { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+table.data td { padding: 4px 6px; vertical-align: top; }
+table.data td.lbl { width: 175px; color: #555; }
+h2 { font-size: 12px; background: #E8EEF5; padding: 5px 8px; margin: 12px 0 6px; color: #0F3D66; text-transform: uppercase; letter-spacing: .5px; }
+table.barang { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+table.barang th, table.barang td { border: 1px solid #999; padding: 5px 7px; font-size: 11.5px; }
+table.barang th { background: #F1F5F9; }
+.catatan { border: 1px solid #ccc; padding: 7px 9px; font-size: 11.5px; background: #FAFAFA; margin-bottom: 10px; }
+.ttd { display: flex; justify-content: space-between; margin-top: 38px; page-break-inside: avoid; }
+.ttd div { width: 45%; text-align: center; font-size: 11.5px; }
+.ttd .space { height: 58px; }
+footer { margin-top: 20px; font-size: 10px; color: #888; text-align: center; }
+@media print { body { margin: 12mm; } }
+</style></head><body>
+<div class="kop"><h1>LAPAS KELAS IIA BONTANG</h1>
+<p>Jl. Gajah Mada, Bontang, Kalimantan Timur &middot; Sistem Informasi Barang Titipan</p></div>
+<div class="judul">Lembar Data Barang Titipan</div>
+<div class="subjudul">Kode: ${escHtml(data.kode_titipan)} &middot; Status: ${escHtml(data.status)}</div>
+<h2>A. Biodata Pemilik / Pengirim Barang</h2>
+<table class="data">
+<tr><td class="lbl">Nama Lengkap</td><td>: <b>${escHtml(data.nama_pengirim)}</b></td></tr>
+<tr><td class="lbl">NIK</td><td>: ${escHtml(data.nik_pengirim)}</td></tr>
+<tr><td class="lbl">No. HP</td><td>: ${escHtml(data.no_hp)}</td></tr>
+<tr><td class="lbl">Hubungan dengan WBP</td><td>: ${escHtml(data.hubungan)}</td></tr>
+</table>
+<h2>B. Data WBP Tujuan</h2>
+<table class="data">
+<tr><td class="lbl">Nama WBP</td><td>: <b>${parts.wbpNama}</b></td></tr>
+<tr><td class="lbl">Nomor Register</td><td>: ${parts.wbpReg}</td></tr>
+${parts.blokRow}
+<tr><td class="lbl">Kategori Barang</td><td>: ${escHtml(data.kategori)}</td></tr>
+<tr><td class="lbl">Tanggal Penitipan</td><td>: ${escHtml(data.tanggal_penitipan)}${data.jam_penitipan ? ` pukul ${escHtml(data.jam_penitipan)}` : ""}</td></tr>
+</table>
+<h2>C. Daftar Barang</h2>
+<table class="barang"><thead>
+<tr><th style="width:34px">No</th><th>Nama Barang</th><th style="width:90px">Jumlah</th><th>Keterangan</th><th style="width:110px">Status Verifikasi</th></tr>
+</thead><tbody>${parts.itemRows}</tbody></table>
+${parts.catatanBlock}
+<div class="ttd">
+<div>Pengirim,<div class="space"></div>${escHtml(data.nama_pengirim)}</div>
+<div>Petugas Pelayanan,<div class="space"></div>${parts.ttdVerified}</div>
+</div>
+<footer>Dicetak: ${new Date().toLocaleString("id-ID")} &middot; Diverifikasi: ${
+    data.verified_at ? new Date(data.verified_at).toLocaleString("id-ID") : "-"
+  } &middot; Dokumen dicetak otomatis oleh sistem</footer>
+</body></html>`;
+}
+
+
+function printHtmlDocument(html: string) {
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow?.document;
+  if (!doc) {
+    iframe.remove();
+    toast.error("Gagal menyiapkan dokumen cetak");
+    return;
+  }
+  doc.open();
+  doc.write(html);
+  doc.close();
+  const win = iframe.contentWindow;
+  setTimeout(() => {
+    win?.focus();
+    win?.print();
+    setTimeout(() => iframe.remove(), 1500);
+  }, 300);
+}
+

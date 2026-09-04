@@ -6,14 +6,13 @@ import { error } from '@/lib/api-response'
 
 export const GET = authenticatedEndpoint(
   [PERM_NOTIFIKASI],
-  async (request: NextRequest) => {
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
-    const isRead = searchParams.get('isRead')
+  async (request: NextRequest, auth) => {
+    const isRead = request.nextUrl.searchParams.get('isRead')
 
     try {
-      const where: Record<string, unknown> = {}
-      if (userId) where.userId = userId
+      // Anti-IDOR: notifikasi SELALU milik user yang sedang login.
+      // (Sebelumnya userId bebas diisi via query param.)
+      const where: Record<string, unknown> = { userId: auth.userId }
       if (isRead !== null && isRead !== undefined && isRead !== '') {
         where.isRead = isRead === 'true'
       }
@@ -66,7 +65,7 @@ export const POST = authenticatedEndpoint(
 
 export const PUT = authenticatedEndpoint(
   [PERM_NOTIFIKASI],
-  async (request: NextRequest) => {
+  async (request: NextRequest, auth) => {
     try {
       const body = await request.json()
       const { ids } = body as { ids: string[] }
@@ -75,8 +74,9 @@ export const PUT = authenticatedEndpoint(
         return error('BAD_REQUEST', 'ids array wajib dikirim', 400)
       }
 
+      // Anti-IDOR: hanya notifikasi milik user login yang boleh ditandai dibaca
       const result = await db.notifikasi.updateMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ids }, userId: auth.userId },
         data: { isRead: true },
       })
 

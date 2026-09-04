@@ -4,16 +4,16 @@
   "description": "Sistem Informasi Pengamanan dan Pelayanan Terpadu Pemasyarakatan — Lapas Kelas IIA Bontang",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f5132",
-  "theme_color": "#0f5132",
+  "background_color": "#061C2C",
+  "theme_color": "#C9A227",
   "lang": "id-ID",
   "orientation": "portrait-primary",
   "categories": ["government", "productivity", "business"],
   "icons": [
     {
-      "src": "/logo.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

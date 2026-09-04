@@ -1,6 +1,94 @@
 import { db } from '@/lib/db'
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
+import bcrypt from 'bcryptjs'
 import { error } from './api-response'
+
+// ──────────────────────────────────────────────
+// PASSWORD HASHING (bcryptjs)
+// ──────────────────────────────────────────────
+
+const BCRYPT_ROUNDS = 10
+
+/** Hash a plain-text password with bcrypt. */
+export async function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, BCRYPT_ROUNDS)
+}
+
+/** Returns true if the stored value looks like a bcrypt hash. */
+export function isBcryptHash(stored: string): boolean {
+  return /^\$2[aby]\$/.test(stored)
+}
+
+/**
+ * Verify a password against the stored value.
+ * Supports legacy plain-text storage (demo data) and bcrypt hashes.
+ */
+export async function verifyPassword(plain: string, stored: string): Promise<boolean> {
+  if (isBcryptHash(stored)) {
+    return bcrypt.compare(plain, stored)
+  }
+  // Legacy plain-text comparison (pre-migration demo data)
+  return stored === plain
+}
+
+// ──────────────────────────────────────────────
+// SIGNED TOKEN (HMAC-SHA256) — format: base64url(payload).base64url(signature)
+// ──────────────────────────────────────────────
+
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+function getTokenSecret(): string {
+  return process.env.NEXTAUTH_SECRET || 'sipadupas-dev-secret-change-me'
+}
+
+interface TokenPayload {
+  sub: string
+  iat: number
+  exp: number
+}
+
+/** Sign a new access token for the given user id (expires in 7 days). */
+export function signToken(userId: string): string {
+  const payload: TokenPayload = {
+    sub: userId,
+    iat: Date.now(),
+    exp: Date.now() + TOKEN_TTL_MS,
+  }
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const signature = crypto
+    .createHmac('sha256', getTokenSecret())
+    .update(body)
+    .digest('base64url')
+  return `${body}.${signature}`
+}
+
+/** Verify signature + expiry of a signed token. Returns the payload or null. */
+export function verifyToken(token: string): TokenPayload | null {
+  const parts = token.split('.')
+  if (parts.length !== 2) return null
+  const [body, signature] = parts
+
+  const expected = crypto
+    .createHmac('sha256', getTokenSecret())
+    .update(body)
+    .digest('base64url')
+
+  const sigBuf = Buffer.from(signature)
+  const expBuf = Buffer.from(expected)
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    return null
+  }
+
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString()) as TokenPayload
+    if (typeof payload.sub !== 'string' || !payload.sub) return null
+    if (typeof payload.exp !== 'number' || payload.exp < Date.now()) return null
+    return payload
+  } catch {
+    return null
+  }
+}
 
 // ──────────────────────────────────────────────
 // ACCOUNT LOCKOUT CONSTANTS
@@ -108,8 +196,8 @@ export interface AuthPayload {
 
 /**
  * Verify Bearer token from Authorization header.
- * Token format: {userId}-{timestamp}
- * Looks up user in DB, validates active status, returns AuthPayload.
+ * Token format: base64url(payload).base64url(HMAC-SHA256 signature)
+ * Validates signature + expiry, looks up user in DB, validates active status.
  */
 export async function verifyAuth(request: NextRequest): Promise<AuthPayload | NextResponse> {
   const authHeader = request.headers.get('authorization')
@@ -122,14 +210,14 @@ export async function verifyAuth(request: NextRequest): Promise<AuthPayload | Ne
     return error('UNAUTHORIZED_ACCESS', 'Token tidak valid atau telah kadaluwarsa', 401)
   }
 
-  // Token format: {userId}-{timestamp}
-  const userId = token.split('-')[0]
-  if (!userId) {
+  // Verify HMAC signature + expiry, extract user id
+  const payload = verifyToken(token)
+  if (!payload) {
     return error('UNAUTHORIZED_ACCESS', 'Token tidak valid atau telah kadaluwarsa', 401)
   }
 
   const user = await db.user.findUnique({
-    where: { id: userId },
+    where: { id: payload.sub },
     include: { userRoles: { include: { role: true } } },
   })
 

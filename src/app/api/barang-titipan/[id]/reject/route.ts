@@ -11,9 +11,12 @@ export const PUT = authenticatedEndpoint(
     const segments = request.nextUrl.pathname.split('/').filter(Boolean)
     const id = segments[2] // api/barang-titipan/{id}/reject
     const body = await request.json()
-    const { alasan_penolakan } = body as { alasan_penolakan?: string }
 
-    if (!alasan_penolakan) {
+    // Terima kedua format field (snake_case dari frontend / camelCase dari spec)
+    const payload = body as { alasan_penolakan?: string; alasanPenolakan?: string }
+    const alasanPenolakan = payload.alasan_penolakan || payload.alasanPenolakan
+
+    if (!alasanPenolakan || !alasanPenolakan.trim()) {
       return error('BAD_REQUEST', 'alasan_penolakan wajib diisi', 400)
     }
 
@@ -41,7 +44,7 @@ export const PUT = authenticatedEndpoint(
         },
         data: {
           status: 'Ditolak',
-          alasanPenolakan: alasan_penolakan,
+          alasanPenolakan,
         },
       })
 
@@ -65,8 +68,8 @@ export const PUT = authenticatedEndpoint(
         entityName: 'BarangTitipan',
         entityId: id,
         oldValues: JSON.stringify({ status: existing.status }),
-        newValues: JSON.stringify({ status: 'Ditolak', alasan_penolakan }),
-        detail: `Penolakan barang titipan ${existing.kodeTitipan} — alasan: ${alasan_penolakan}`,
+        newValues: JSON.stringify({ status: 'Ditolak', alasanPenolakan }),
+        detail: `Penolakan barang titipan ${existing.kodeTitipan} — alasan: ${alasanPenolakan}`,
         ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
         userAgent: request.headers.get('user-agent') || null,
       },

@@ -1,6 +1,11 @@
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
+
+async function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, 10)
+}
 
 async function main() {
   console.log('🌱 Seeding SIPADUPAS database (v2 — ERD-aligned)...')
@@ -43,6 +48,10 @@ async function main() {
   // ─── 2. PERMISSIONS ─────────────────────────────────────
   console.log('  → Creating Permissions...')
   const permDefs = [
+    // Dashboard and reporting permissions are used by the API guards.
+    // Keep these codes aligned with src/lib/security/permissions.ts.
+    { code: 'dashboard', name: 'Lihat Dashboard Pimpinan' },
+    { code: 'laporan', name: 'Lihat Laporan' },
     { code: 'wbp:create', name: 'Tambah WBP' },
     { code: 'wbp:read', name: 'Lihat WBP' },
     { code: 'wbp:update', name: 'Edit WBP' },
@@ -53,13 +62,19 @@ async function main() {
     { code: 'kunjungan:create', name: 'Ajukan Kunjungan' },
     { code: 'kunjungan:read', name: 'Lihat Kunjungan' },
     { code: 'kunjungan:update', name: 'Kelola Kunjungan' },
+    { code: 'kunjungan:approve', name: 'Setujui Kunjungan' },
+    { code: 'kunjungan:checkin', name: 'Check-in Kunjungan' },
+    { code: 'barang-titipan:create', name: 'Ajukan Barang Titipan' },
+    { code: 'barang-titipan:read', name: 'Lihat Barang Titipan' },
+    { code: 'barang-titipan:verify', name: 'Verifikasi Barang Titipan' },
+    { code: 'barang-titipan:deliver', name: 'Serahkan Barang Titipan' },
+    { code: 'barang-titipan:reject', name: 'Tolak Barang Titipan' },
     { code: 'pengaduan:create', name: 'Ajukan Pengaduan' },
     { code: 'pengaduan:read', name: 'Lihat Pengaduan' },
     { code: 'pengaduan:update', name: 'Tangani Pengaduan' },
     { code: 'admin:users', name: 'Kelola Pengguna' },
     { code: 'admin:roles', name: 'Kelola Roles' },
     { code: 'admin:audit', name: 'Lihat Audit Log' },
-    { code: 'laporan:read', name: 'Lihat Laporan' },
     { code: 'pembinaan:create', name: 'Buat Program Pembinaan' },
     { code: 'pembinaan:read', name: 'Lihat Pembinaan' },
     { code: 'pembinaan:update', name: 'Edit Pembinaan' },
@@ -93,7 +108,7 @@ async function main() {
     })
   }
   // SECURITY_OFFICER
-  const secPerms = permissions.filter(p => ['wbp:read', 'gangguan:create', 'gangguan:read', 'gangguan:update', 'kunjungan:read', 'kunjungan:update'].includes(p.code))
+  const secPerms = permissions.filter(p => ['wbp:read', 'gangguan:create', 'gangguan:read', 'gangguan:update', 'kunjungan:read', 'kunjungan:update', 'kunjungan:checkin', 'barang-titipan:read', 'barang-titipan:verify', 'barang-titipan:deliver', 'barang-titipan:reject'].includes(p.code))
   for (const perm of secPerms) {
     await prisma.rolePermission.upsert({
       where: { roleId_permissionId: { roleId: roles[2].id, permissionId: perm.id } },
@@ -112,7 +127,7 @@ async function main() {
     })
   }
   // MANAGEMENT
-  const mgmtPerms = permissions.filter(p => ['wbp:read', 'gangguan:read', 'kunjungan:read', 'pengaduan:read', 'laporan:read', 'pembinaan:read'].includes(p.code))
+  const mgmtPerms = permissions.filter(p => ['dashboard', 'laporan', 'wbp:read', 'gangguan:read', 'kunjungan:read', 'pengaduan:read', 'pembinaan:read', 'pengamanan:read', 'barang-titipan:read'].includes(p.code))
   for (const perm of mgmtPerms) {
     await prisma.rolePermission.upsert({
       where: { roleId_permissionId: { roleId: roles[4].id, permissionId: perm.id } },
@@ -138,7 +153,7 @@ async function main() {
       nip: 'admin',
       nama: 'Super Admin',
       email: 'admin@lapasbontang.go.id',
-      password: 'admin1234',
+      password: await hashPassword('admin1234'),
       jabatan: 'Kepala Lapas',
       noHp: '081234567890',
       isActive: true,
@@ -168,7 +183,7 @@ async function main() {
         nip: u.nip,
         nama: u.nama,
         email: u.email,
-        password: u.password,
+        password: await hashPassword(u.password),
         jabatan: u.jabatan,
         noHp: u.noHp,
         isActive: u.isActive,
@@ -254,13 +269,6 @@ async function main() {
   }
 
   // Update currentOccupancy on block rooms
-  const roomCounts: Record<string, number> = {}
-  for (const w of wbps) {
-    if (w.status === 'Aktif' || w.status === 'Isolasi') {
-      const room = blockRooms[wbpData.find(wd => wd.nomorRegister === wbpData.find(wb => wb.nama === w.nama)?.nomorRegister)?.roomIdx || 0]
-      // Find the room ID for this WBP
-    }
-  }
   // Simple approach: count WBP per room and update
   for (const br of blockRooms) {
     const count = wbpData.filter((w, i) => {
@@ -275,18 +283,21 @@ async function main() {
 
   // ─── 7. REGU PENGAMANAN (2) ────────────────────────────
   console.log('  → Creating Regu Pengamanan...')
-  const reguA = await prisma.reguPengamanan.create({
-    data: { nama: 'Regu Alpha', anggota: JSON.stringify([superAdmin.id]), status: 'Aktif' },
-  })
-  const reguB = await prisma.reguPengamanan.create({
-    data: { nama: 'Regu Bravo', anggota: JSON.stringify([superAdmin.id]), status: 'Aktif' },
-  })
+  const getOrCreateRegu = async (nama: string) => {
+    const existing = await prisma.reguPengamanan.findFirst({ where: { nama } })
+    return existing ?? prisma.reguPengamanan.create({
+      data: { nama, anggota: JSON.stringify([superAdmin.id]), status: 'Aktif' },
+    })
+  }
+  const reguA = await getOrCreateRegu('Regu Alpha')
+  const reguB = await getOrCreateRegu('Regu Bravo')
 
   // ─── 8. JADWAL REGU (3) ─────────────────────────────────
   console.log('  → Creating Jadwal Regu...')
   const today = new Date().toISOString().split('T')[0]
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+  await prisma.jadwalRegu.deleteMany({ where: { reguId: { in: [reguA.id, reguB.id] } } })
   await prisma.jadwalRegu.createMany({
     data: [
       { reguId: reguA.id, tanggal: yesterday, shift: 'Pagi', pos: 'Pos Utama', leaderUserId: superAdmin.id },
@@ -298,23 +309,81 @@ async function main() {
   // ─── 9. KUNJUNGAN (5) ──────────────────────────────────
   console.log('  → Creating Kunjungan...')
   const kunjunganStatuses = ['Menunggu', 'Disetujui', 'Check-in', 'Selesai', 'Ditolak']
-  await prisma.kunjungan.createMany({
-    data: wbps.slice(0, 5).map((wbp, i) => ({
-      kodeBooking: `KBJ-${String(i + 1).padStart(4, '0')}`,
-      namaPemohon: ['Siti Aminah', 'Budi Santoso', 'Rina Wati', 'Dewi Lestari', 'Agus Setiawan'][i],
-      nikPemohon: `64${String(1000000000 + i)}`,
-      noHp: `0812${String(34560000 + i)}`,
-      alamat: 'Jl. Awang Long No. 1, Bontang',
-      hubungan: ['Istri', 'Saudara', 'Anak', 'Istri', 'Teman'][i],
-      wbpId: wbp.id,
-      tanggal: today,
-      sesi: i < 3 ? 'Sesi 1 Pagi' : 'Sesi 2 Siang',
-      status: kunjunganStatuses[i],
-    })),
+  await prisma.kunjungan.deleteMany({
+    where: { kodeBooking: { in: ['KBJ-0001', 'KBJ-0002', 'KBJ-0003', 'KBJ-0004', 'KBJ-0005'] } },
   })
+  const dummyUpload = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+  for (const [i, wbp] of wbps.slice(0, 5).entries()) {
+    await prisma.kunjungan.create({
+      data: {
+        kodeBooking: `KBJ-${String(i + 1).padStart(4, '0')}`,
+        namaPemohon: ['Siti Aminah', 'Budi Santoso', 'Rina Wati', 'Dewi Lestari', 'Agus Setiawan'][i],
+        nikPemohon: `64710101010100${String(i + 1).padStart(2, '0')}`,
+        noHp: `0812${String(34560000 + i)}`,
+        alamat: 'Jl. Awang Long No. 1, Bontang',
+        hubungan: ['Istri', 'Saudara', 'Anak', 'Istri', 'Teman'][i],
+        wbpId: wbp.id,
+        tanggal: today,
+        sesi: i < 3 ? 'Sesi 1 Pagi' : 'Sesi 2 Siang',
+        keperluan: i === 4 ? 'Kunjungan tidak disetujui karena dokumen tidak sesuai' : 'Kunjungan keluarga',
+        jenisIdentitas: 'KTP',
+        setujuPersyaratan: true,
+        persetujuanAt: new Date(),
+        status: kunjunganStatuses[i],
+        checkedInAt: i >= 2 && i < 4 ? new Date() : null,
+        selesaiAt: i === 3 ? new Date() : null,
+        catatanPetugas: i === 4 ? 'Foto identitas tidak terbaca, silakan unggah ulang.' : i === 1 ? 'Data telah diverifikasi petugas.' : null,
+        berkas: {
+          create: [
+            { jenis: 'IDENTITAS', namaFile: 'dummy-ktp.png', mimeType: 'image/png', ukuran: 1, data: dummyUpload },
+            { jenis: 'SELFIE', namaFile: 'dummy-selfie.png', mimeType: 'image/png', ukuran: 1, data: dummyUpload },
+          ],
+        },
+      },
+    })
+  }
+
+  // ─── 9b. BARANG TITIPAN (4) with ITEMS ──────────────────
+  console.log('  → Creating Barang Titipan...')
+  await prisma.barangTitipan.deleteMany({
+    where: { kodeTitipan: { in: ['TRP-2501-001', 'TRP-2501-002', 'TRP-2501-003', 'TRP-2501-004'] } },
+  })
+  const titipanData = [
+    {
+      kodeTitipan: 'TRP-2501-001', namaPengirim: 'Siti Aminah', nikPengirim: '6471010101010001', noHp: '081234567890',
+      hubungan: 'Istri', wbpId: wbps[0].id, kategori: 'Pakaian', tanggalPenitipan: today, jamPenitipan: '09:15',
+      status: 'Menunggu', catatanPengirim: 'Pakaian harian untuk WBP.',
+      items: [{ namaBarang: 'Kaos', jumlah: 3, satuan: 'pcs', keterangan: 'Warna polos' }, { namaBarang: 'Celana panjang', jumlah: 2, satuan: 'pcs', keterangan: null }],
+    },
+    {
+      kodeTitipan: 'TRP-2501-002', namaPengirim: 'Budi Santoso', nikPengirim: '6471010101010002', noHp: '081234567891',
+      hubungan: 'Saudara', wbpId: wbps[1].id, kategori: 'Makanan', tanggalPenitipan: yesterday, jamPenitipan: '10:30',
+      status: 'Diverifikasi', catatanPetugas: 'Seluruh item sesuai ketentuan.', verifiedById: superAdmin.id, verifiedAt: new Date(),
+      items: [{ namaBarang: 'Biskuit', jumlah: 4, satuan: 'bungkus', keterangan: 'Kemasan tertutup' }],
+    },
+    {
+      kodeTitipan: 'TRP-2501-003', namaPengirim: 'Rina Wati', nikPengirim: '6471010101010003', noHp: '081234567892',
+      hubungan: 'Anak', wbpId: wbps[2].id, kategori: 'Kebutuhan Sehari-hari', tanggalPenitipan: yesterday, jamPenitipan: '13:00',
+      status: 'Diterima', catatanPetugas: 'Barang telah diserahkan kepada WBP.', verifiedById: superAdmin.id, verifiedAt: new Date(Date.now() - 3600000), deliveredAt: new Date(),
+      items: [{ namaBarang: 'Sabun mandi', jumlah: 2, satuan: 'pcs', keterangan: null }, { namaBarang: 'Pasta gigi', jumlah: 1, satuan: 'pcs', keterangan: null }],
+    },
+    {
+      kodeTitipan: 'TRP-2501-004', namaPengirim: 'Dewi Lestari', nikPengirim: '6471010101010004', noHp: '081234567893',
+      hubungan: 'Istri', wbpId: wbps[3].id, kategori: 'Obat-obatan', tanggalPenitipan: today, jamPenitipan: '08:45',
+      status: 'Ditolak', alasanPenolakan: 'Obat wajib disertai surat dokter dan resep yang berlaku.', rejectedAt: new Date(),
+      items: [{ namaBarang: 'Obat flu', jumlah: 1, satuan: 'kotak', status: 'Ditolak', alasanPenolakan: 'Dokumen pendukung tidak tersedia.' }],
+    },
+  ]
+  for (const titipan of titipanData) {
+    const { items, ...data } = titipan
+    await prisma.barangTitipan.create({ data: { ...data, items: { create: items } } })
+  }
 
   // ─── 10. PENGADUAN (3) ──────────────────────────────────
   console.log('  → Creating Pengaduan...')
+  await prisma.pengaduan.deleteMany({
+    where: { kodeTracking: { in: ['PGD-001', 'PGD-002', 'PGD-003'] } },
+  })
   await prisma.pengaduan.createMany({
     data: [
       {
@@ -355,6 +424,9 @@ async function main() {
 
   // ─── 11. GANGGUAN (2) ──────────────────────────────────
   console.log('  → Creating Gangguan...')
+  await prisma.gangguan.deleteMany({
+    where: { nomorInsiden: { in: ['INS-2025-001', 'INS-2025-002'] } },
+  })
   await prisma.gangguan.createMany({
     data: [
       {
@@ -390,6 +462,9 @@ async function main() {
 
   // ─── 12. PROGRAM PEMBINAAN (2) with Peserta ─────────────
   console.log('  → Creating Program Pembinaan...')
+  await prisma.programPembinaan.deleteMany({
+    where: { nama: { in: ['Pendidikan Paket B', 'Pelatihan Tata Boga'] } },
+  })
   const prog1 = await prisma.programPembinaan.create({
     data: {
       nama: 'Pendidikan Paket B',
@@ -432,6 +507,12 @@ async function main() {
 
   // ─── 13. SERAH TERIMA (2) ──────────────────────────────
   console.log('  → Creating Serah Terima...')
+  await prisma.serahTerima.deleteMany({
+    where: {
+      reguId: { in: [reguA.id, reguB.id] },
+      catatanKeamanan: { in: ['Semua kondisi aman, tidak ada kejadian.', '1 WBP di Blok A terlibat perkelahian, sedang ditangani.'] },
+    },
+  })
   await prisma.serahTerima.createMany({
     data: [
       {
@@ -462,6 +543,7 @@ async function main() {
   // ─── 14. WBP RAWAT INAP (1) ─────────────────────────────
   console.log('  → Creating WBP Rawat Inap...')
   const rawatInapWbp = wbps.find(w => w.status === 'Rawat Inap') || wbps[7]
+  await prisma.wBPRawatInap.deleteMany({ where: { wbpId: rawatInapWbp.id, rumahSakit: 'RS Taman Husada Bontang' } })
   await prisma.wBPRawatInap.create({
     data: {
       wbpId: rawatInapWbp.id,
@@ -475,6 +557,7 @@ async function main() {
   // ─── 15. WBP KERJA LUAR (1) ─────────────────────────────
   console.log('  → Creating WBP Kerja Luar...')
   const kerjaLuarWbp = wbps.find(w => w.status === 'Kerja Luar') || wbps[9]
+  await prisma.wBPKerjaLuar.deleteMany({ where: { wbpId: kerjaLuarWbp.id, kegiatan: 'Pemeliharaan Taman' } })
   await prisma.wBPKerjaLuar.create({
     data: {
       wbpId: kerjaLuarWbp.id,
@@ -489,6 +572,9 @@ async function main() {
 
   // ─── 16. NOTIFIKASI (3) ─────────────────────────────────
   console.log('  → Creating Notifikasi...')
+  await prisma.notifikasi.deleteMany({
+    where: { userId: superAdmin.id, judul: { in: ['Gangguan Keamanan Blok A', 'Kunjungan Baru', 'Pengaduan Selesai'] } },
+  })
   await prisma.notifikasi.createMany({
     data: [
       { userId: superAdmin.id, judul: 'Gangguan Keamanan Blok A', isi: 'Perkelahian terdeteksi di Kamar A1. Segera tangani.', jenis: 'urgent' },
@@ -499,6 +585,9 @@ async function main() {
 
   // ─── 17. BERITA (3) ─────────────────────────────────────
   console.log('  → Creating Berita...')
+  await prisma.berita.deleteMany({
+    where: { slug: { in: ['pembinaan-tata-boga-2025', 'renovasi-blok-c', 'upacara-hut-ri'] } },
+  })
   await prisma.berita.createMany({
     data: [
       {
@@ -535,6 +624,9 @@ async function main() {
 
   // ─── 18. LAYANAN INFORMASI (3: PB, CB, CMB) ─────────────
   console.log('  → Creating Layanan Informasi...')
+  await prisma.layananInformasi.deleteMany({
+    where: { slug: { in: ['pembebasan-bersyarat-pb', 'cuti-bersyarat-cb', 'cuti-menjelang-bebas-cmb'] } },
+  })
   await prisma.layananInformasi.createMany({
     data: [
       {
@@ -578,6 +670,9 @@ async function main() {
 
   // ─── 19. SKM RESPONSES (2) ─────────────────────────────
   console.log('  → Creating SKM Responses...')
+  await prisma.sKMResponse.deleteMany({
+    where: { nama: { in: ['Siti Aminah', 'Budi Santoso'] }, layanan: { in: ['Pembebasan Bersyarat', 'Kunjungan'] } },
+  })
   await prisma.sKMResponse.createMany({
     data: [
       { nama: 'Siti Aminah', layanan: 'Pembebasan Bersyarat', nilai: 4.2, kritikSaran: 'Pelayanan sudah baik, namun informasi bisa lebih transparan.' },
@@ -587,6 +682,9 @@ async function main() {
 
   // ─── 20. AUDIT LOG ENTRIES ──────────────────────────────
   console.log('  → Creating Audit Log entries...')
+  await prisma.auditLog.deleteMany({
+    where: { userId: superAdmin.id, ipAddress: '127.0.0.1', entityName: { in: ['auth', 'wbp', 'kunjungan', 'gangguan', 'pengaduan'] } },
+  })
   await prisma.auditLog.createMany({
     data: [
       { userId: superAdmin.id, action: 'LOGIN', entityName: 'auth', detail: 'Super Admin login', ipAddress: '127.0.0.1' },

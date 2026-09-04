@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import type { ViewKey, RoleKey } from "@/lib/data";
 import { roleList, dataNotifikasi } from "@/lib/data";
 import { useAppStore } from "@/lib/store";
+import { clearAuthFromStorage } from "@/lib/auth-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -62,6 +63,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PageHeader } from "@/components/page-header";
 import { LoginDialog } from "@/components/login-dialog";
+import { RegisterDialog } from "@/components/register-dialog";
 
 // ─── Bottom Tab Navigation (mobile) ──────────────────────────────────
 type BottomTab = { key: ViewKey | "_more"; label: string; icon: typeof ShieldCheck };
@@ -105,7 +107,7 @@ const navItems: NavItem[] = [
   { key: "wbp", label: "Manajemen WBP", icon: Users, area: "internal", desc: "Data WBP & mutasi" },
   { key: "kunjungan", label: "Pelayanan Kunjungan", icon: CalendarCheck, area: "internal", desc: "Booking & check-in" },
   { key: "pengaduan", label: "Pengaduan Publik", icon: MessageSquareWarning, area: "internal", desc: "Penanganan aduan" },
-  { key: "informasi", label: "Layanan Informasi", icon: Info, area: "internal", desc: "PB, CB, CMB, FAQ" },
+  { key: "informasi", label: "Layanan Informasi", icon: Info, area: "public", desc: "PB, CB, CMB, FAQ" },
   { key: "pembinaan", label: "Pembinaan", icon: GraduationCap, area: "internal", desc: "Program & peserta" },
   { key: "publikasi", label: "Publikasi", icon: Newspaper, area: "internal", desc: "Berita & galeri" },
   { key: "laporan", label: "Dashboard & Reporting", icon: FileBarChart, area: "internal", desc: "Statistik & SKM" },
@@ -151,6 +153,7 @@ interface AppShellProps {
 export function AppShell({ view, setView, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
 
   // Auth state
@@ -178,7 +181,7 @@ export function AppShell({ view, setView, children }: AppShellProps) {
 
   const userRoleKey = (currentUser?.role as RoleKey) || undefined;
   const currentRole = userRoleKey
-    ? roleList.find((r) => r.key === userRoleKey)
+    ? roleList.find((r) => r.key === userRoleKey)!
     : roleList.find((r) => r.key === "PUBLIC_USER")!;
   const allowedModules = currentRole.modules;
   const allowedItems = navItems.filter((n) => {
@@ -220,16 +223,21 @@ export function AppShell({ view, setView, children }: AppShellProps) {
   }
 
   const handleLogout = useCallback(() => {
-    const state = useAppStore.getState();
-    if (state.currentUser?.token) {
-      fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nip: state.currentUser.nip, token: state.currentUser.token }),
-      }).catch(() => {});
-    }
+    // Token invalidation terjadi di sisi klien (hapus state + storage).
+    // Endpoint logout server-side belum ada; token akan kedaluwarsa otomatis (7 hari).
+    clearAuthFromStorage();
     logout();
   }, [logout]);
+
+  const handleLoginClick = useCallback(() => {
+    setLoginOpen(true);
+  }, []);
+
+  const handleSwitchToRegister = useCallback(() => {
+    setLoginOpen(false);
+    // small delay so close animation runs first
+    setTimeout(() => setRegisterOpen(true), 150);
+  }, []);
 
   const sidebarContent = (
     <SidebarContent
@@ -244,7 +252,7 @@ export function AppShell({ view, setView, children }: AppShellProps) {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* ── Header ─────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-blue-900 text-white">
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-[#061C2C] text-white">
         <div className="flex h-14 items-center gap-3 px-3 sm:px-5">
           {/* Mobile hamburger */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -252,7 +260,7 @@ export function AppShell({ view, setView, children }: AppShellProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-white hover:bg-blue-800/50 lg:hidden"
+                className="text-white hover:bg-white/10 lg:hidden"
                 aria-label="Buka menu"
               >
                 <Menu className="size-5" strokeWidth={1.75} />
@@ -260,7 +268,7 @@ export function AppShell({ view, setView, children }: AppShellProps) {
             </SheetTrigger>
             <SheetContent
               side="left"
-              className="w-[280px] bg-blue-900 text-white p-0 border-blue-800"
+              className="w-[280px] bg-[#061C2C] text-white p-0 border-[#0B2A3D]"
             >
               <SheetTitle className="sr-only">Menu SIPADUPAS</SheetTitle>
               {sidebarContent}
@@ -272,7 +280,7 @@ export function AppShell({ view, setView, children }: AppShellProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="hidden lg:flex text-white hover:bg-blue-800/50"
+              className="hidden lg:flex text-white hover:bg-white/10"
               onClick={toggleSidebar}
               aria-label={sidebarCollapsed ? "Perluas sidebar" : "Perkecil sidebar"}
             >
@@ -290,12 +298,16 @@ export function AppShell({ view, setView, children }: AppShellProps) {
             className="flex items-center gap-2.5 hover:opacity-90 transition-opacity"
             aria-label="Beranda SIPADUPAS"
           >
-            <div className="size-8 rounded-lg bg-white/15 flex items-center justify-center">
-              <ShieldCheck className="size-4.5 text-white" strokeWidth={1.75} />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Logo SIPADUPAS"
+              className="size-8 rounded-lg"
+              width={32}
+              height={32}
+            />
             <div className="text-left leading-tight">
               <div className="font-semibold text-sm sm:text-base tracking-wide">SIPADUPAS</div>
-              <div className="text-[10px] text-blue-200/70 hidden sm:block">
+              <div className="text-[10px] text-white/60 hidden sm:block">
                 Lapas Kelas IIA Bontang
               </div>
             </div>
@@ -311,7 +323,7 @@ export function AppShell({ view, setView, children }: AppShellProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative text-white hover:bg-blue-800/50"
+                className="relative text-white hover:bg-white/10"
                 aria-label="Notifikasi"
                 onClick={() => handleNav("notifikasi")}
               >
@@ -324,17 +336,22 @@ export function AppShell({ view, setView, children }: AppShellProps) {
               </Button>
             )}
 
-            {/* Auth: Login button or User dropdown */}
+            {/* Auth: Login icon button or User dropdown */}
             {isPublic ? (
-              <Button
-                onClick={() => setLoginOpen(true)}
-                variant="outline"
-                className="border-white/30 text-white hover:bg-white/10 hover:text-white"
-              >
-                <LogIn className="size-4 mr-1.5" strokeWidth={1.75} />
-                <span className="hidden sm:inline">Masuk Sistem</span>
-                <span className="sm:hidden">Masuk</span>
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleLoginClick}
+                    variant="ghost"
+                    size="icon"
+                    className="text-white hover:bg-blue-800/50"
+                    aria-label="Masuk Sistem"
+                  >
+                    <LogIn className="size-5" strokeWidth={1.75} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Masuk Sistem</TooltipContent>
+              </Tooltip>
             ) : (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -383,7 +400,7 @@ export function AppShell({ view, setView, children }: AppShellProps) {
         {/* ── Desktop Sidebar (auto-hide on hover) ──────────── */}
         <aside
           className={cn(
-            "hidden lg:flex shrink-0 flex-col bg-blue-900 text-white border-r border-blue-800 relative",
+            "hidden lg:flex shrink-0 flex-col bg-[#061C2C] text-white border-r border-[#0B2A3D] relative",
             "transition-[width] duration-200 ease-in-out",
             isPublic
               ? sidebarHovered ? "w-[260px]" : "w-[56px]"
@@ -396,7 +413,7 @@ export function AppShell({ view, setView, children }: AppShellProps) {
         >
           {/* Expand indicator bar (visible when collapsed) */}
           <div className={cn(
-            "absolute right-0 top-1/4 bottom-1/4 w-[3px] rounded-l-full bg-teal-400/60 transition-opacity duration-300",
+            "absolute right-0 top-1/4 bottom-1/4 w-[3px] rounded-l-full bg-[#E0C15A]/70 transition-opacity duration-300",
             (isPublic ? sidebarHovered : !sidebarCollapsed || sidebarHovered) ? "opacity-0" : "opacity-100"
           )} />
           <div className="sticky top-14 flex-1 h-[calc(100vh-3.5rem)] overflow-y-auto scroll-thin">
@@ -418,7 +435,14 @@ export function AppShell({ view, setView, children }: AppShellProps) {
       </div>
 
       {/* Login Dialog */}
-      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
+      <LoginDialog
+        open={loginOpen}
+        onOpenChange={setLoginOpen}
+        onRegisterClick={handleSwitchToRegister}
+      />
+
+      {/* Register Dialog */}
+      <RegisterDialog open={registerOpen} onOpenChange={setRegisterOpen} />
 
       {/* ── Mobile Bottom Tab Navigation ────────────────── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-white/90 backdrop-blur-lg border-t border-border/60 shadow-[0_-1px_8px_rgba(0,0,0,0.06)]">
@@ -439,7 +463,7 @@ export function AppShell({ view, setView, children }: AppShellProps) {
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 min-h-[56px] transition-colors relative",
                   active
-                    ? "text-teal-600"
+                    ? "text-[#C9A227]"
                     : "text-slate-400 active:text-slate-700"
                 )}
               >
@@ -501,19 +525,19 @@ function SidebarContent({
             <ShieldCheck className="size-5 text-white" strokeWidth={1.75} />
           </div>
           <div className="text-sm font-semibold tracking-wide">SIPADUPAS</div>
-          <div className="text-[10px] text-blue-200/70 leading-snug mt-1">
+          <div className="text-[10px] text-white/60 leading-snug mt-1">
             Sistem Informasi Pengamanan & Pelayanan Terpadu
           </div>
           <div className="mt-2">
-            <Badge className="bg-teal-600 text-white text-[10px]">
+            <Badge className="bg-[#C9A227] text-[#061C2C] text-[10px]">
               Lapas Kelas IIA Bontang
             </Badge>
           </div>
-          <div className="mt-1.5 text-[10px] text-blue-200/60">
+          <div className="mt-1.5 text-[10px] text-white/50">
             Peran: <span className="font-semibold text-white">{roleLabel}</span>
           </div>
         </div>
-        <Separator className="bg-blue-800" />
+        <Separator className="bg-[#0B2A3D]" />
       </div>
 
       {/* Nav items */}
@@ -521,7 +545,7 @@ function SidebarContent({
         {publicItems.length > 0 && (
           <>
             <div className={cn(
-              "px-2 pt-1 pb-1 text-[10px] uppercase tracking-wider text-blue-200/50 transition-all duration-200",
+              "px-2 pt-1 pb-1 text-[10px] uppercase tracking-wider text-white/40 transition-all duration-200",
               collapsed ? "opacity-0 h-0 overflow-hidden" : "opacity-100 h-5"
             )}>
               Portal Publik
@@ -582,8 +606,8 @@ function SidebarContent({
         "transition-all duration-200 ease-in-out",
         collapsed ? "opacity-0 max-h-0 overflow-hidden" : "opacity-100 max-h-[100px]"
       )}>
-        <Separator className="bg-blue-800" />
-        <div className="p-3 text-[10px] text-blue-200/60 leading-relaxed">
+        <Separator className="bg-[#0B2A3D]" />
+        <div className="p-3 text-[10px] text-white/50 leading-relaxed">
           <div className="flex items-center gap-1.5 mb-1">
             <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Sistem operasional
@@ -616,8 +640,8 @@ function SidebarNavItem({
         "w-full flex items-center gap-3 rounded-lg text-sm transition-all",
         collapsed ? "justify-center px-0 py-2.5" : "px-3 py-2.5",
         active
-          ? "bg-blue-800/50 text-blue-200 font-medium"
-          : "text-blue-200/90 hover:bg-blue-800/50 hover:text-white"
+          ? "bg-[#0B2A3D]/70 text-white font-medium"
+          : "text-white/70 hover:bg-[#0B2A3D]/70 hover:text-white"
       )}
       aria-current={active ? "page" : undefined}
     >
@@ -715,7 +739,7 @@ function PublicFooter() {
               </div>
               <span className="font-semibold text-white tracking-wide">SIPADUPAS</span>
             </div>
-            <p className="text-sm text-blue-200/70 leading-relaxed">
+            <p className="text-sm text-white/60 leading-relaxed">
               Sistem Informasi Pengamanan dan Pelayanan Terpadu Pemasyarakatan —
               Lapas Kelas IIA Bontang, Kalimantan Timur.
             </p>
@@ -724,7 +748,7 @@ function PublicFooter() {
           {/* Contact */}
           <div>
             <h4 className="text-sm font-semibold text-white mb-3">Kontak</h4>
-            <ul className="space-y-2 text-sm text-blue-200/70">
+            <ul className="space-y-2 text-sm text-white/60">
               <li className="flex items-start gap-2">
                 <MapPin className="size-4 mt-0.5 shrink-0" strokeWidth={1.75} />
                 Jl. Brigjen Katamso No. 1, Bontang, Kalimantan Timur 75311
@@ -743,7 +767,7 @@ function PublicFooter() {
           {/* Map Placeholder */}
           <div>
             <h4 className="text-sm font-semibold text-white mb-3">Lokasi</h4>
-            <div className="rounded-lg bg-blue-800/50 border border-blue-700/50 h-32 flex items-center justify-center text-blue-200/50 text-xs">
+            <div className="rounded-lg bg-[#0B2A3D]/50 border border-[#0B2A3D]/60 h-32 flex items-center justify-center text-white/50 text-xs">
               <div className="text-center">
                 <MapPin className="size-5 mx-auto mb-1" strokeWidth={1.75} />
                 Peta Lokasi
@@ -754,7 +778,7 @@ function PublicFooter() {
           {/* Links */}
           <div>
             <h4 className="text-sm font-semibold text-white mb-3">Tautan</h4>
-            <ul className="space-y-2 text-sm text-blue-200/70">
+            <ul className="space-y-2 text-sm text-white/60">
               <li>
                 <button className="hover:text-white transition-colors flex items-center gap-1.5">
                   <ExternalLink className="size-3.5" strokeWidth={1.75} />
@@ -778,8 +802,8 @@ function PublicFooter() {
         </div>
 
         {/* Bottom bar */}
-        <Separator className="bg-blue-800 my-6" />
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-blue-200/50">
+        <Separator className="bg-[#0B2A3D] my-6" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-white/40">
           <span>© {new Date().getFullYear()} Lapas Kelas IIA Bontang — Seluruh hak cipta dilindungi.</span>
           <span>SIPADUPAS v1.1.0 · id.go.lapasbontang.sipadupas</span>
         </div>

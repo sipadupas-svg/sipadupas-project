@@ -52,14 +52,18 @@ export const GET = authenticatedEndpoint(
       rejected_at: record.rejectedAt,
       created_at: record.createdAt,
       updated_at: record.updatedAt,
-      wbp: {
-        id: record.wbp.id,
-        nomor_register: record.wbp.nomorRegister,
-        nama: record.wbp.nama,
-        status: record.wbp.status,
-        blok: record.wbp.currentRoom?.blockName || null,
-        kamar: record.wbp.currentRoom?.roomNumber || null,
-      },
+      nama_wbp: record.namaWbp || record.wbp?.nama || null,
+      nomor_register_wbp: record.nomorRegisterWbp || record.wbp?.nomorRegister || null,
+      wbp: record.wbp
+        ? {
+            id: record.wbp.id,
+            nomor_register: record.wbp.nomorRegister,
+            nama: record.wbp.nama,
+            status: record.wbp.status,
+            blok: record.wbp.currentRoom?.blockName || null,
+            kamar: record.wbp.currentRoom?.roomNumber || null,
+          }
+        : null,
       verified_by: record.verifiedBy
         ? { id: record.verifiedBy.id, nama: record.verifiedBy.nama, nip: record.verifiedBy.nip }
         : null,

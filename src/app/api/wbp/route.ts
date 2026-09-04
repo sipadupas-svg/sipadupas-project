@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { authenticatedEndpoint } from '@/lib/security/security-pipeline'
 import { PERM_WBP_READ, PERM_WBP_CREATE } from '@/lib/security/permissions'
-import { success, error } from '@/lib/api-response'
+import { success, error, parsePagination, buildMeta } from '@/lib/api-response'
 
 // GET /api/wbp — List all WBP with optional filters (UF-02)
 export const GET = authenticatedEndpoint(
@@ -44,6 +44,24 @@ export const GET = authenticatedEndpoint(
 
       if (risiko) {
         where.risiko = risiko
+      }
+
+      // Pagination opsional: ?page=&limit= → meta disertakan.
+      const wantsPagination = searchParams.get('page') || searchParams.get('limit')
+
+      if (wantsPagination) {
+        const { page, limit, skip } = parsePagination(searchParams)
+        const [total, wbpPage] = await Promise.all([
+          db.wBP.count({ where: where as Record<string, unknown> }),
+          db.wBP.findMany({
+            where,
+            include: { currentRoom: true },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: limit,
+          }),
+        ])
+        return NextResponse.json({ data: wbpPage, meta: buildMeta(total, page, limit) })
       }
 
       const wbpList = await db.wBP.findMany({

@@ -53,8 +53,10 @@ export const GET = authenticatedEndpoint(
           : 0
 
       const skmResult = await db.sKMResponse.aggregate({ _avg: { nilai: true } })
+      // SKM responses are stored on a 1–5 scale, while the dashboard displays
+      // the KPI as a percentage (0–100).
       const skmScore = skmResult._avg.nilai
-        ? Math.round(skmResult._avg.nilai * 100) / 100
+        ? Math.round((skmResult._avg.nilai / 5) * 10000) / 100
         : 0
 
       const wbpPerRoom = await db.wBP.groupBy({
@@ -99,6 +101,7 @@ export const GET = authenticatedEndpoint(
       const statusWBP = await db.wBP.groupBy({
         by: ['status'],
         _count: { id: true },
+        where: { status: { not: 'Bebas' } },
       })
       const statusWBPArray = statusWBP.map((s) => ({
         status: s.status,
