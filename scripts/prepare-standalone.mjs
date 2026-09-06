@@ -41,9 +41,12 @@ for (const [src, dest] of prismaClientModules) {
   }
 }
 
-// 4. SQLite database directory (if using file:./db/custom.db)
+// 4. SQLite database directory (skip on Vercel — pakai PostgreSQL/Supabase)
+const isVercel = process.env.VERCEL === "1";
 const dbSrc = path.join(projectRoot, "db");
-if (existsSync(dbSrc)) {
+if (isVercel) {
+  console.log("- Vercel build: skip db/ & .env copy");
+} else if (existsSync(dbSrc)) {
   await cp(dbSrc, path.join(standaloneRoot, "db"), { recursive: true });
   console.log("✓ db/ copied");
 } else {
@@ -51,9 +54,11 @@ if (existsSync(dbSrc)) {
   console.log("✓ db/ directory created (empty)");
 }
 
-// 5. .env file (for runtime configuration)
+// 5. .env file (for runtime configuration) — skip on Vercel (env via dashboard)
 const envSrc = path.join(projectRoot, ".env");
-if (existsSync(envSrc)) {
+if (isVercel) {
+  console.log("- Vercel build: .env not copied");
+} else if (existsSync(envSrc)) {
   await copyFile(envSrc, path.join(standaloneRoot, ".env"));
   console.log("✓ .env copied");
 }
