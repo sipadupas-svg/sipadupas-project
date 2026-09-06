@@ -68,3 +68,5 @@ git-version-*.txt
 # SQLite local database (jangan di-commit untuk deployment)
 prisma/db
 /db
+.vercel
+.env*
