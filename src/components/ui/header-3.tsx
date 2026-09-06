@@ -86,7 +86,6 @@ export function Header({
 						className="hover:bg-accent flex items-center gap-2.5 rounded-md p-2"
 						aria-label="Beranda SIPADUPAS"
 					>
-						{/* eslint-disable-next-line @next/next/no-img-element */}
 						<img src="/logo.png" alt="Logo SIPADUPAS" className="size-9 rounded-lg shadow-sm" width={36} height={36} />
 						<span className="hidden text-left sm:block">
 							<span className="block text-sm font-bold leading-tight tracking-[0.08em]">SIPADUPAS</span>

@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/dialog";
 import { LoginDialog } from "@/components/login-dialog";
 import { RegisterDialog } from "@/components/register-dialog";
+import { Header } from "@/components/ui/header-3";
 
 interface HomepageProps {
   onNavigate: (v: ViewKey) => void;
@@ -187,8 +188,6 @@ const SKM_GRADE = ["Kurang Baik", "Cukup", "Baik", "Sangat Baik"];
 export function Homepage({ onNavigate }: HomepageProps) {
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const currentUser = useAppStore((s) => s.currentUser);
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [runningText, setRunningText] = useState("");
@@ -214,13 +213,6 @@ export function Homepage({ onNavigate }: HomepageProps) {
   const handleSwitchToRegister = useCallback(() => {
     setLoginOpen(false);
     setRegisterOpen(true);
-  }, []);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 16);
-    onScroll();
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const go = (v: ViewKey) => onNavigate(v);
@@ -250,24 +242,13 @@ export function Homepage({ onNavigate }: HomepageProps) {
         }
       `}</style>
 
-      <Navbar
-        scrolled={scrolled}
-        menuOpen={menuOpen}
-        onToggleMenu={() => setMenuOpen((o) => !o)}
+      <Header
         onNav={go}
         onAnchor={goAnchor}
         onLogin={() => setLoginOpen(true)}
         authenticated={isAuthenticated}
         userLabel={currentUser?.nama}
         onDashboard={() => go("dashboard")}
-      />
-
-      <MobileMenu
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        onNav={go}
-        onAnchor={goAnchor}
-        onOpenLogin={() => setLoginOpen(true)}
       />
 
       <LoginDialog
