@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback, type CSSProperties, type ReactNode } from "react";
+import { useState, useCallback, type CSSProperties, type ReactNode } from "react";
 import type { ViewKey } from "@/lib/data";
 import { useAppStore } from "@/lib/store";
-import { Navbar, MobileMenu, Footer } from "./public-homepage";
+import { Footer } from "./public-homepage";
+import { Header } from "@/components/ui/header-3";
 import { LoginDialog } from "@/components/login-dialog";
 import { RegisterDialog } from "@/components/register-dialog";
 
@@ -45,21 +46,12 @@ export function PublicLayout({
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
   const currentUser = useAppStore((s) => s.currentUser);
 
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
 
   const handleSwitchToRegister = useCallback(() => {
     setLoginOpen(false);
     setRegisterOpen(true);
-  }, []);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 16);
-    onScroll();
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const go = (v: ViewKey) => setView(v);
@@ -77,24 +69,13 @@ export function PublicLayout({
         }
       `}</style>
 
-      <Navbar
-        scrolled={scrolled}
-        menuOpen={menuOpen}
-        onToggleMenu={() => setMenuOpen((o) => !o)}
+      <Header
         onNav={go}
         onAnchor={goAnchor}
         onLogin={() => setLoginOpen(true)}
         authenticated={isAuthenticated}
         userLabel={currentUser?.nama}
         onDashboard={() => go("dashboard")}
-      />
-
-      <MobileMenu
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        onNav={go}
-        onAnchor={goAnchor}
-        onOpenLogin={() => setLoginOpen(true)}
       />
 
       <LoginDialog
@@ -105,7 +86,7 @@ export function PublicLayout({
 
       <RegisterDialog open={registerOpen} onOpenChange={setRegisterOpen} />
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-5 pb-16 pt-24 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-5 pb-16 pt-10 sm:px-6 lg:px-8">
         {children}
       </main>
 
