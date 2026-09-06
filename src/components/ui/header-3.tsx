@@ -74,22 +74,23 @@ export function Header({
 
 	return (
 		<header
-			className={cn('sticky top-0 z-50 w-full border-b border-transparent', {
-				'bg-background/95 supports-[backdrop-filter]:bg-background/50 border-border backdrop-blur-lg':
+			className={cn('sticky top-0 z-50 w-full border-b transition-all duration-300', {
+				'border-[#C9A227]/25 bg-[#061C2C]/95 shadow-lg shadow-black/20 backdrop-blur-md':
 					scrolled,
+				'border-transparent bg-[#061C2C]': !scrolled,
 			})}
 		>
 			<nav className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
 				<div className="flex items-center gap-5">
 					<button
 						onClick={() => onNav?.('landing')}
-						className="hover:bg-accent flex items-center gap-2.5 rounded-md p-2"
+						className="hover:bg-white/10 flex items-center gap-2.5 rounded-md p-2"
 						aria-label="Beranda SIPADUPAS"
 					>
 						<img src="/logo.png" alt="Logo SIPADUPAS" className="size-9 rounded-lg shadow-sm" width={36} height={36} />
 						<span className="hidden text-left sm:block">
-							<span className="block text-sm font-bold leading-tight tracking-[0.08em]">SIPADUPAS</span>
-							<span className="text-muted-foreground block text-[10px] font-medium tracking-wide">
+							<span className="block text-sm font-bold leading-tight tracking-[0.08em] text-white">SIPADUPAS</span>
+							<span className="block text-[10px] font-medium tracking-wide text-white/60">
 								Lapas Kelas IIA Bontang
 							</span>
 						</span>
@@ -97,7 +98,7 @@ export function Header({
 					<NavigationMenu className="hidden md:flex">
 						<NavigationMenuList>
 							<NavigationMenuItem>
-								<NavigationMenuTrigger className="bg-transparent">Layanan</NavigationMenuTrigger>
+								<NavigationMenuTrigger className="bg-transparent text-white/80 hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white data-[state=open]:bg-white/10 data-[state=open]:text-white">Layanan</NavigationMenuTrigger>
 								<NavigationMenuContent className="bg-background p-1 pr-1.5">
 									<ul className="bg-popover grid w-lg grid-cols-2 gap-2 rounded-md border p-2 shadow">
 										{layananLinks.map((item, i) => (
@@ -120,7 +121,7 @@ export function Header({
 								</NavigationMenuContent>
 							</NavigationMenuItem>
 							<NavigationMenuItem>
-								<NavigationMenuTrigger className="bg-transparent">Informasi</NavigationMenuTrigger>
+								<NavigationMenuTrigger className="bg-transparent text-white/80 hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white data-[state=open]:bg-white/10 data-[state=open]:text-white">Informasi</NavigationMenuTrigger>
 								<NavigationMenuContent className="bg-background p-1 pr-1.5 pb-1.5">
 									<div className="grid w-lg grid-cols-2 gap-2">
 										<ul className="bg-popover space-y-2 rounded-md border p-2 shadow">
@@ -146,7 +147,10 @@ export function Header({
 								</NavigationMenuContent>
 							</NavigationMenuItem>
 							<NavigationMenuLink className="px-4" asChild>
-								<button onClick={() => onAnchor?.('layanan')} className="hover:bg-accent rounded-md p-2">
+								<button
+									onClick={() => onAnchor?.('layanan')}
+									className="text-white/80 hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white rounded-md p-2"
+								>
 									Layanan Informasi
 								</button>
 							</NavigationMenuLink>
@@ -155,23 +159,36 @@ export function Header({
 				</div>
 				<div className="hidden items-center gap-2 md:flex">
 					{authenticated ? (
-						<Button variant="outline" onClick={onDashboard}>
+						<Button
+							variant="outline"
+							onClick={onDashboard}
+							className="border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+						>
 							<LayoutDashboard className="size-4" />
 							{userLabel ? `Dashboard ${userLabel.split(' ')[0]}` : 'Dashboard'}
 						</Button>
 					) : (
-						<Button variant="outline" onClick={onLogin}>
+						<Button
+							variant="outline"
+							onClick={onLogin}
+							className="border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+						>
 							<LogIn className="size-4" />
 							Masuk
 						</Button>
 					)}
-					<Button onClick={() => onNav?.('kunjungan')}>Kunjungan Online</Button>
+					<Button
+						onClick={() => onNav?.('kunjungan')}
+						className="bg-gradient-to-r from-[#C9A227] via-[#D4AF37] to-[#E0C15A] font-semibold text-[#061C2C] shadow-md shadow-black/20 hover:brightness-110"
+					>
+						Kunjungan Online
+					</Button>
 				</div>
 				<Button
 					size="icon"
 					variant="outline"
 					onClick={() => setOpen(!open)}
-					className="md:hidden"
+					className="md:hidden border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
 					aria-expanded={open}
 					aria-controls="mobile-menu"
 					aria-label="Buka menu navigasi"
@@ -182,32 +199,43 @@ export function Header({
 			<MobileMenu open={open} className="flex flex-col justify-between gap-2 overflow-y-auto">
 				<NavigationMenu className="max-w-full">
 					<div className="flex w-full flex-col gap-y-2">
-						<span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">Layanan</span>
+						<span className="text-xs font-semibold uppercase tracking-wider text-white/50">Layanan</span>
 						{layananLinks.map((link) => (
-							<ListItem key={link.title} {...link} onSelect={() => handleNav(link)} />
+							<ListItem key={link.title} {...link} dark onSelect={() => handleNav(link)} />
 						))}
-						<span className="text-muted-foreground mt-3 text-xs font-semibold uppercase tracking-wider">Informasi</span>
+						<span className="mt-3 text-xs font-semibold uppercase tracking-wider text-white/50">Informasi</span>
 						{informasiLinks.map((link) => (
-							<ListItem key={link.title} {...link} onSelect={() => handleNav(link)} />
+							<ListItem key={link.title} {...link} dark onSelect={() => handleNav(link)} />
 						))}
 						{informasiLinks2.map((link) => (
-							<ListItem key={link.title} {...link} onSelect={() => handleNav(link)} />
+							<ListItem key={link.title} {...link} dark onSelect={() => handleNav(link)} />
 						))}
 					</div>
 				</NavigationMenu>
 				<div className="flex flex-col gap-2 pt-4">
 					{authenticated ? (
-						<Button variant="outline" className="w-full bg-transparent" onClick={onDashboard}>
+						<Button
+							variant="outline"
+							className="w-full border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+							onClick={onDashboard}
+						>
 							<LayoutDashboard className="size-4" />
 							Dashboard
 						</Button>
 					) : (
-						<Button variant="outline" className="w-full bg-transparent" onClick={onLogin}>
+						<Button
+							variant="outline"
+							className="w-full border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+							onClick={onLogin}
+						>
 							<LogIn className="size-4" />
 							Masuk
 						</Button>
 					)}
-					<Button className="w-full" onClick={() => onNav?.('kunjungan')}>
+					<Button
+						className="w-full bg-gradient-to-r from-[#C9A227] via-[#D4AF37] to-[#E0C15A] font-semibold text-[#061C2C] shadow-md shadow-black/20 hover:brightness-110"
+						onClick={() => onNav?.('kunjungan')}
+					>
 						Kunjungan Online
 					</Button>
 				</div>
@@ -227,8 +255,8 @@ function MobileMenu({ open, children, className, ...props }: MobileMenuProps) {
 		<div
 			id="mobile-menu"
 			className={cn(
-				'bg-background/95 supports-[backdrop-filter]:bg-background/50 backdrop-blur-lg',
-				'fixed top-16 right-0 bottom-0 left-0 z-40 flex flex-col overflow-hidden border-y md:hidden',
+				'bg-[#061C2C]/95 supports-[backdrop-filter]:bg-[#061C2C]/85 text-white backdrop-blur-md',
+				'fixed top-16 right-0 bottom-0 left-0 z-40 flex flex-col overflow-hidden border-y border-[#C9A227]/20 md:hidden',
 			)}
 		>
 			<div
@@ -250,6 +278,7 @@ function MobileMenu({ open, children, className, ...props }: MobileMenuProps) {
 type ListItemProps = React.ComponentProps<typeof NavigationMenuLink> &
 	NavItem & {
 		onSelect?: () => void;
+		dark?: boolean;
 	};
 
 function ListItem({
@@ -258,24 +287,37 @@ function ListItem({
 	icon: Icon,
 	className,
 	onSelect,
+	dark,
 	...props
 }: ListItemProps) {
 	return (
 		<NavigationMenuLink
 			className={cn(
-				'hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground data-[active=true]:bg-accent/50 data-[active=true]:text-accent-foreground data-[active=true]:hover:bg-accent data-[active=true]:focus:bg-accent flex w-full flex-row gap-x-2 rounded-sm p-2',
+				dark
+					? 'text-white hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white'
+					: 'hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground data-[active=true]:bg-accent/50 data-[active=true]:text-accent-foreground data-[active=true]:hover:bg-accent data-[active=true]:focus:bg-accent',
+				'flex w-full flex-row gap-x-2 rounded-sm p-2',
 				className,
 			)}
 			{...props}
 			asChild
 		>
 			<button onClick={onSelect} type="button" className="text-left">
-				<div className="bg-background/40 flex aspect-square size-12 items-center justify-center rounded-md border shadow-sm">
-					<Icon className="text-foreground size-5" />
+				<div
+					className={cn(
+						'flex aspect-square size-12 items-center justify-center rounded-md border',
+						dark ? 'border-white/15 bg-white/10 shadow-none' : 'bg-background/40 shadow-sm',
+					)}
+				>
+					<Icon className={cn('size-5', dark ? 'text-white' : 'text-foreground')} />
 				</div>
 				<div className="flex flex-col items-start justify-center">
 					<span className="font-medium">{title}</span>
-					{description && <span className="text-muted-foreground text-xs">{description}</span>}
+					{description && (
+						<span className={cn('text-xs', dark ? 'text-white/60' : 'text-muted-foreground')}>
+							{description}
+						</span>
+					)}
 				</div>
 			</button>
 		</NavigationMenuLink>

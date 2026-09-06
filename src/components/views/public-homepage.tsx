@@ -9,14 +9,11 @@ import {
   Newspaper,
   Image as ImageIcon,
   ArrowRight,
-  ArrowUpRight,
   CheckCircle2,
   FileText,
   Users,
   Package,
   Star,
-  Menu,
-  X,
   Phone,
   Mail,
   MapPin,
@@ -26,7 +23,6 @@ import {
   ShoppingBag,
   Eye,
   Camera,
-  LogIn,
   ClipboardList,
   Wrench,
   Stethoscope,
@@ -36,7 +32,6 @@ import {
   Search,
   BadgeCheck,
   LifeBuoy,
-  LayoutDashboard,
   QrCode,
 } from "lucide-react";
 import type { ViewKey } from "@/lib/data";
@@ -63,19 +58,6 @@ interface HomepageProps {
    Premium Government Digital Service Platform
    Dark Navy #061C2C · Gold #C9A227 · White · Light Gray #F7F8FA
 ────────────────────────────────────────────────────────────────────── */
-
-/* ── NAV ITEMS ────────────────────────────────────────────────────── */
-const NAV_LINKS: { label: string; view?: ViewKey; anchor?: string }[] = [
-  { label: "Beranda", view: "landing" },
-  { label: "Layanan", anchor: "layanan" },
-  { label: "Kunjungan", view: "kunjungan" },
-  { label: "Pengaduan", view: "pengaduan" },
-  { label: "Berita", view: "berita" },
-  { label: "Galeri", view: "galeri" },
-  { label: "Produk WBP", view: "produk" },
-  { label: "Titipan Barang", view: "barangTitipan" },
-  { label: "Kontak", anchor: "kontakt" },
-];
 
 /* ── QUICK ACCESS CARDS (Section 5) ─────────────────────────────── */
 const QUICK_ACCESS: { view: ViewKey; icon: typeof Info; title: string; desc: string; cta: string }[] = [
@@ -288,61 +270,6 @@ export function Homepage({ onNavigate }: HomepageProps) {
       <SkmSection go={go} />
       <FinalCta go={go} />
       <Footer go={go} goAnchor={goAnchor} />
-    </div>
-  );
-}
-
-/* ═══ MOBILE MENU ══════════════════════════════════════════════ */
-export function MobileMenu({
-  open,
-  onClose,
-  onNav,
-  onAnchor,
-  onOpenLogin,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onNav: (v: ViewKey) => void;
-  onAnchor: (id: string) => void;
-  onOpenLogin: () => void;
-}) {
-  return (
-    <div
-      className={cn(
-        "fixed inset-x-4 top-[72px] z-40 origin-top rounded-2xl border border-white/10 bg-[#061C2C] p-4 shadow-2xl transition-all duration-300 lg:hidden max-h-screen overflow-y-auto",
-        open ? "scale-100 opacity-100" : "pointer-events-none scale-95 opacity-0"
-      )}
-    >
-      <nav className="flex flex-col">
-        {NAV_LINKS.map((l) => (
-          <button
-            key={l.label}
-            onClick={() => {
-              onClose();
-              if (l.view) onNav(l.view);
-              else if (l.anchor) onAnchor(l.anchor);
-            }}
-            className="flex items-center justify-between border-b border-white/5 py-3 text-left text-[15px] font-medium text-white/90 transition-colors last:border-0 hover:text-[#E0C15A]"
-          >
-            {l.label}
-            <ArrowRight className="size-4 opacity-40" />
-          </button>
-        ))}
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
-            onClick={() => { onClose(); onNav("kunjungan"); }}
-            className="flex h-11 items-center justify-center rounded-xl bg-gradient-to-r from-[#C9A227] to-[#E0C15A] text-sm font-semibold text-[#061C2C] hover:brightness-110"
-          >
-            Kunjungan Online
-          </button>
-          <button
-            onClick={() => { onClose(); onOpenLogin(); }}
-            className="flex h-11 items-center justify-center rounded-xl border border-white/20 text-sm font-semibold text-white hover:bg-white/10"
-          >
-            Login
-          </button>
-        </div>
-      </nav>
     </div>
   );
 }
@@ -933,112 +860,6 @@ function GallerySection({ go }: { go: (v: ViewKey) => void }) {
       </DialogContent>
     </Dialog>
     </>
-  );
-}
-
-/* ═══ NAVBAR ═══════════════════════════════════════════════════ */
-export function Navbar({
-  scrolled,
-  menuOpen,
-  onToggleMenu,
-  onNav,
-  onAnchor,
-  onLogin,
-  authenticated,
-  userLabel,
-  onDashboard,
-}: {
-  scrolled: boolean;
-  menuOpen: boolean;
-  onToggleMenu: () => void;
-  onNav: (v: ViewKey) => void;
-  onAnchor: (id: string) => void;
-  onLogin: () => void;
-  authenticated: boolean;
-  userLabel?: string;
-  onDashboard: () => void;
-}) {
-  return (
-    <header
-      className={cn(
-        "fixed inset-x-0 top-0 z-50 transition-all duration-300",
-        scrolled
-          ? "bg-[#061C2C]/95 shadow-lg shadow-black/20 backdrop-blur-md py-2.5"
-          : "bg-gradient-to-b from-[#061C2C]/90 to-transparent py-4"
-      )}
-    >
-      <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-4">
-          <button onClick={() => onNav("landing")} className="flex shrink-0 items-center gap-3">
-            <img
-              src="/logo.png"
-              alt="Logo SIPADUPAS"
-              className="size-10 rounded-xl shadow-md"
-              width={40}
-              height={40}
-            />
-            <span className="text-left">
-              <span className="block text-base font-bold leading-tight tracking-[0.08em] text-white">
-                SIPADUPAS
-              </span>
-              <span className="block text-[11px] font-medium tracking-wide text-white/60">
-                Lapas Kelas IIA Bontang
-              </span>
-            </span>
-          </button>
-
-          <nav className="hidden items-center gap-0.5 lg:flex">
-            {NAV_LINKS.map((l) => (
-              <button
-                key={l.label}
-                onClick={() => {
-                  if (l.view) onNav(l.view);
-                  else if (l.anchor) onAnchor(l.anchor);
-                }}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/5 hover:text-white"
-              >
-                {l.label}
-              </button>
-            ))}
-          </nav>
-
-          <div className="hidden items-center gap-2 sm:flex">
-            {authenticated ? (
-              <button
-                onClick={onDashboard}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
-              >
-                <LayoutDashboard className="size-4" strokeWidth={1.75} />
-                Dashboard
-              </button>
-            ) : (
-              <button
-                onClick={onLogin}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
-              >
-                <LogIn className="size-4" strokeWidth={1.75} />
-                Masuk
-              </button>
-            )}
-            <button
-              onClick={() => onNav("kunjungan")}
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#C9A227] via-[#D4AF37] to-[#E0C15A] px-4 text-sm font-semibold text-[#061C2C] shadow-md shadow-black/20 transition hover:brightness-110"
-            >
-              Kunjungan Online
-              <ArrowUpRight className="size-4" strokeWidth={2} />
-            </button>
-          </div>
-
-          <button
-            onClick={onToggleMenu}
-            className="inline-flex size-10 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/10 lg:hidden"
-            aria-label="Menu"
-          >
-            {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-          </button>
-        </div>
-      </div>
-    </header>
   );
 }
 
