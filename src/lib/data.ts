@@ -725,8 +725,7 @@ export const dataSKMPertanyaan: SKMPertanyaan[] = [
 
 // ---------- Tentang Lapas (§11) ----------
 export const tentangLapas = {
-  profil: "Lapas Kelas IIA Bontang adalah Unit Pelaksana Teknis Pemasyarakatan di bawah Kementerian Hukum dan HAM RI yang berkedudukan di Kota Bontang, Kalimantan Timur. Lapas ini berfungsi melaksanakan pembinaan terhadap Warga Binaan Pemasyarakatan (WBP) dengan pendekatan humanis, integratif, dan berkeadilan.",
-  sejarah: "Lapas Kelas IIA Bontang resmi berdiri pada tahun 1985 sebagai Cabang Lapas Tenggarong. Seiring peningkatan kapasitas dan pemekaran wilayah, statusnya ditingkatkan menjadi Lapas Kelas IIA Bontang pada tahun 2003. Sejak saat itu, Lapas Bontang terus berinovasi dalam program pembinaan WBP dan modernisasi sistem pengamanan.",
+  profil: "Lembaga Pemasyarakatan (Lapas) Kelas IIA Bontang adalah Unit Pelaksana Teknis (UPT) Pemasyarakatan di bawah naungan Kementerian Imigrasi dan Pemasyarakatan (sebelumnya Kemenkumham), yang berfungsi sebagai tempat pengamanan serta pembinaan bagi narapidana dan tahanan.",
   visi: "Menjadi Lembaga Pemasyarakatan yang profesional, modern, dan humanis dalam mendukung sistem pemidanaan nasional yang berkeadilan.",
   misi: [
     "Melaksanakan pembinaan WBP secara terpadu dan berkelanjutan",
