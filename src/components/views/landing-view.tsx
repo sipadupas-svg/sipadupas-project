@@ -205,7 +205,7 @@ export function LandingView({ onNavigate }: LandingViewProps) {
                 </div>
                 <div className="text-left">
                   <div className="text-blue-200 text-xs font-medium tracking-widest uppercase">
-                    Kementerian Hukum dan HAM RI
+                    Kementerian Imigrasi dan Pemasyarakatan RI
                   </div>
                   <div className="text-blue-200/70 text-[11px]">
                     Direktorat Jenderal Pemasyarakatan
