@@ -736,17 +736,17 @@ export const tentangLapas = {
     "Membangun tata kelola yang transparan, akuntabel, dan berbasis data",
   ],
   struktur: [
-    { jabatan: "Kalapas", nama: "Bpk. H. Sutrisno, S.H., M.H." },
-    { jabatan: "Waka Lapas", nama: "Bpk. Rahmat Hidayat, S.Sos." },
-    { jabatan: "Kasi Pemasyarakatan", nama: "Bpk. Dedi Kurnia, S.H." },
-    { jabatan: "Kasi Pembinaan", nama: "Ibu Vera Lestari, M.Psi." },
-    { jabatan: "Kasi Tata Bina", nama: "Bpk. Andi Wijaya, S.T." },
-    { jabatan: "Kasi Program & Evaluasi", nama: "Bpk. Rudi Hartono, M.M." },
+    { jabatan: "Kalapas", nama: "Bpk. Agus Wahono, A.Md.I.P., S.H., M.H." },
+    { jabatan: "KA.KPLP", nama: "Bpk. Arif Afandi, A.Md.P., S.H., M.H." },
+    { jabatan: "Kasi Binadik", nama: "Bpk. Pamuji Setyo Wibowo, A.Md.I.P., S.H." },
+    { jabatan: "Kasi KAMTIB", nama: "Bpk. Joni Wasinton Siagian, S.H., M.H." },
+    { jabatan: "Kasi Giatja", nama: "Bpk. Adi Sukatno, SH." },
+    { jabatan: "Kasubbag TU", nama: "Bpk. Edy Jaang, S.H.." },
   ],
   kontak: {
-    alamat: "Jl. Diponegoro No. 1, Bontang Utara, Kota Bontang, Kalimantan Timur 75311",
-    telepon: "(0548) 000-0000",
-    email: "lapasbontang@kemenkumham.go.id",
+    alamat: "Jl. Prestasi, Kelurahan Bontang Lestari, Kecamatan Bontang Selatan, Kota Bontang, Kalimantan Timur 75325",
+    telepon: "+62 878-4153-7996",
+    email: "sipadupas@gmail.com",
     jamLayanan: "Senin – Jumat: 08.00 – 16.00 WITA",
     jamKunjungan: "Senin – Jumat: 09.00 – 16.00 WITA · Sabtu: 09.00 – 12.00 WITA",
   },
@@ -980,8 +980,8 @@ export const dataSystemSettings: SystemSetting[] = [
 
 // ---------- User Info with role ----------
 export const userInfoWithRole = {
-  nama: "Bpk. Andi Wijaya",
-  email: "admin@lapasbontang.go.id",
+  nama: "Bpk. M. Naufal Adi Saputra, S.Tr.Pas., M.H.",
+  email: "sipadupas@gmail.com",
   role: "ADMIN_LAPAS" as RoleKey,
   avatar: "AW",
 };
