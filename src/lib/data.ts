@@ -747,8 +747,8 @@ export const tentangLapas = {
     alamat: "Jl. Prestasi, Kelurahan Bontang Lestari, Kecamatan Bontang Selatan, Kota Bontang, Kalimantan Timur 75325",
     telepon: "+62 878-4153-7996",
     email: "sipadupas@gmail.com",
-    jam Layanan: "Senin – Jumat: 08.00 – 16.00 WITA",
-    jam Kunjungan: "Senin – Jumat: 09.00 – 16.00 WITA · Sabtu: 09.00 – 12.00 WITA",
+    jamLayanan: "Senin – Jumat: 08.00 – 16.00 WITA",
+    jamKunjungan: "Senin – Jumat: 09.00 – 16.00 WITA · Sabtu: 09.00 – 12.00 WITA",
   },
   statistik: {
     kapasitas: 450,
