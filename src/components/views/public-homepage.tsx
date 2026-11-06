@@ -120,8 +120,8 @@ const MAIN_SERVICES: { view: string; icon: typeof Info; name: string; desc: stri
   { view: "publikasi", icon: Newspaper, name: "Informasi Pemasyarakatan", desc: "Informasi resmi dan transparansi publikasi pemasyarakatan." },
   { view: "galeri", icon: Camera, name: "Galeri Pembinaan", desc: "Dokumentasi kegiatan pembinaan, layanan, dan keterampilan." },
   { view: "produk", icon: ShoppingBag, name: "Produk WBP", desc: "Menampilkan karya dan produk Warga Binaan hasil keterampilan." },
-  { view: "berita", icon: Newspaper, name: "Berita & Pengumuman", desc: "Berita resmi, pengumuman, dan kegiatan Lapas Kelas I A Bontang." },
-  { view: "kontak", icon: MapPin, name: "Kontak & Informasi", desc: "Alamat, nomor kontak, dan informasi Lapas Kelas I A Bontang." },
+  { view: "berita", icon: Newspaper, name: "Berita & Pengumuman", desc: "Berita resmi, pengumuman, dan kegiatan Lapas Kelas IIA Bontang." },
+  { view: "kontak", icon: MapPin, name: "Kontak & Informasi", desc: "Alamat, nomor kontak, dan informasi Lapas Kelas IIA Bontang." },
 ];
 
 /* ── STATS (Section 6) — editable via admin / database ──────────── */
@@ -1221,7 +1221,7 @@ export function Footer({ go, goAnchor }: { go: (v: ViewKey) => void; goAnchor: (
             <ul className="mt-4 space-y-3 text-sm text-white/70">
               <li className="flex items-start gap-2.5">
                 <MapPin className="mt-0.5 size-4 shrink-0 text-[#C9A227]" strokeWidth={1.75} />
-                Jl. Brigjen Katamso No. 1, Bontang, Kalimantan Timur
+                Jl. Prestasi Kelurahan Bontang Lestari, Kecamatan Bontang Selatan, Kota Bontang, Kalimantan Timur
               </li>
               <li className="flex items-center gap-2.5">
                 <Phone className="size-4 shrink-0 text-[#C9A227]" strokeWidth={1.75} />
@@ -1229,7 +1229,7 @@ export function Footer({ go, goAnchor }: { go: (v: ViewKey) => void; goAnchor: (
               </li>
               <li className="flex items-center gap-2.5">
                 <Mail className="size-4 shrink-0 text-[#C9A227]" strokeWidth={1.75} />
-                lapas.bontang@kemenkumham.go.id
+                sipadupas@gmail.com
               </li>
               <li className="flex items-center gap-2.5">
                 <Clock className="size-4 shrink-0 text-[#C9A227]" strokeWidth={1.75} />
